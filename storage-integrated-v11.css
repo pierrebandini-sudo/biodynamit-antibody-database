@@ -1,0 +1,190 @@
+
+/* BioDynaMit integrated storage v11
+   Scope volontairement limité à .storage-integrated-v11 pour ne pas toucher
+   aux autres écrans existants de app.js.
+*/
+.storage-integrated-v11{
+  --sv11-blue:#0876cf;
+  --sv11-line:#dce6ef;
+  --sv11-muted:#718396;
+  color:#193750;
+  font-family:Inter,Arial,sans-serif;
+  font-size:14px;
+}
+.storage-integrated-v11 *{box-sizing:border-box}
+.storage-integrated-v11 button,
+.storage-integrated-v11 input,
+.storage-integrated-v11 select,
+.storage-integrated-v11 textarea{font:inherit}
+.storage-integrated-v11 button{
+  border:1px solid var(--sv11-line);border-radius:7px;background:white;color:#294961;
+  cursor:pointer;padding:9px 13px;font-weight:600
+}
+.storage-integrated-v11 button:hover{border-color:#5fa7de;background:#f0f7ff}
+.storage-integrated-v11 button:focus-visible{outline:3px solid #63b5f4;outline-offset:2px}
+.storage-integrated-v11 button:disabled{cursor:default;opacity:.45}
+.storage-integrated-v11 .sv11-heading{
+  display:flex;justify-content:space-between;align-items:center;margin:4px 0 22px;gap:18px
+}
+.storage-integrated-v11 .sv11-eyebrow{
+  font-size:10px;font-weight:700;letter-spacing:1.8px;color:#69849b;margin:0 0 9px
+}
+.storage-integrated-v11 h1{font-size:29px;letter-spacing:-.8px;margin:0 0 10px;line-height:1.2}
+.storage-integrated-v11 h2{font-size:20px;line-height:1.3;margin:12px 0}
+.storage-integrated-v11 p{line-height:1.6}
+.storage-integrated-v11 .sv11-muted{color:var(--sv11-muted);margin:0}
+.storage-integrated-v11 .sv11-total{display:flex;align-items:center;gap:13px}
+.storage-integrated-v11 .sv11-total strong{font-size:32px;color:var(--sv11-blue)}
+.storage-integrated-v11 .sv11-total span{font-size:12px;color:var(--sv11-muted);max-width:92px}
+.storage-integrated-v11 .sv11-box-cards{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:23px
+}
+.storage-integrated-v11 .sv11-box-card{
+  display:flex;align-items:center;text-align:left;gap:15px;padding:20px;background:#fff
+}
+.storage-integrated-v11 .sv11-box-card.active{
+  background:#f2f8ff;box-shadow:0 0 0 1px #1587de22;border-color:#1587de
+}
+.storage-integrated-v11 .sv11-box-card .icon{
+  display:grid;place-items:center;width:44px;height:44px;border-radius:9px;
+  background:#e6f2ff;color:#288fdb;font-size:26px
+}
+.storage-integrated-v11 .sv11-box-card .body{flex:1;min-width:0}
+.storage-integrated-v11 .sv11-box-card strong{display:block;font-size:15px}
+.storage-integrated-v11 .sv11-box-card small{font-size:11px;color:#778a9b;display:block;margin:7px 0}
+.storage-integrated-v11 .sv11-box-card progress{height:5px;width:100%;accent-color:#41a7d5;display:block}
+.storage-integrated-v11 .sv11-workbench{
+  display:grid;grid-template-columns:minmax(0,1fr) 292px;background:white;
+  border:1px solid var(--sv11-line);border-radius:12px;overflow:hidden;
+  box-shadow:0 5px 22px #24456306
+}
+.storage-integrated-v11 .sv11-bench-main{min-width:0}
+.storage-integrated-v11 .sv11-toolbar{
+  padding:16px 18px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--sv11-line);gap:12px
+}
+.storage-integrated-v11 .sv11-toolbar small{
+  display:block;font-size:11px;color:var(--sv11-muted);margin-top:5px
+}
+.storage-integrated-v11 .sv11-toolbar-buttons{display:flex;gap:10px;align-items:center}
+.storage-integrated-v11 .sv11-toolbar button{font-size:12px}
+.storage-integrated-v11 .sv11-segmented{
+  display:flex;background:#f1f5f9;border-radius:7px;padding:3px
+}
+.storage-integrated-v11 .sv11-segmented button{border:0;background:transparent}
+.storage-integrated-v11 .sv11-segmented .active{
+  background:white;color:var(--sv11-blue);box-shadow:0 1px 5px #173b541a
+}
+.storage-integrated-v11 .sv11-stage{
+  height:535px;position:relative;background:radial-gradient(ellipse at 45% 45%,#f6f8fb,#eaf0f6);
+  overflow:hidden
+}
+.storage-integrated-v11 .sv11-scene{height:100%;width:100%;touch-action:none}
+.storage-integrated-v11 .sv11-scene canvas{display:block;max-width:100%}
+.storage-integrated-v11 .sv11-hover{
+  position:absolute;pointer-events:none;top:15px;left:18px;background:#ffffffed;
+  padding:8px 12px;border-radius:6px;box-shadow:0 2px 8px #1d3b5510;font-size:12px
+}
+.storage-integrated-v11 .sv11-hover:empty{display:none}
+.storage-integrated-v11 .sv11-scene-hint{
+  position:absolute;bottom:12px;left:0;right:0;text-align:center;pointer-events:none;
+  font-size:11px;color:#698198;margin:0
+}
+.storage-integrated-v11 .sv11-bench-footer{
+  display:flex;justify-content:space-between;align-items:center;gap:15px;
+  padding:14px 17px;border-top:1px solid var(--sv11-line);flex-wrap:wrap
+}
+.storage-integrated-v11 .sv11-bench-footer button{font-size:11px;padding:7px 10px}
+.storage-integrated-v11 .sv11-legend-item{
+  display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#698093;margin:4px 10px 4px 0
+}
+.storage-integrated-v11 .sv11-dot{
+  display:inline-block;width:9px;height:9px;border:1px solid #0002;border-radius:50%;flex-shrink:0
+}
+.storage-integrated-v11 .sv11-panel{
+  border-left:1px solid var(--sv11-line);padding:24px 22px;
+  background:linear-gradient(140deg,#fff,#fafcfe)
+}
+.storage-integrated-v11 .sv11-panel-empty{
+  text-align:center;padding-top:100px;color:#879bad;font-size:13px
+}
+.storage-integrated-v11 .sv11-panel-empty>span{font-size:38px;color:#a3bfd2}
+.storage-integrated-v11 .sv11-panel-empty h2{font-size:16px;color:#506e86}
+.storage-integrated-v11 .sv11-vial-art{
+  width:45px;height:100px;position:relative;margin:24px auto 18px;
+  filter:drop-shadow(3px 4px 3px #19334a22)
+}
+.storage-integrated-v11 .sv11-vial-art .cap{
+  position:absolute;top:0;width:45px;height:26px;border-radius:5px 5px 3px 3px;
+  border:1px solid #506174;
+  background:repeating-linear-gradient(90deg,#40596d,#40596d 2px,#688195 3px,#496174 4px)
+}
+.storage-integrated-v11 .sv11-vial-art .body{
+  position:absolute;top:23px;left:4px;width:37px;height:76px;
+  background:linear-gradient(90deg,#d6e5ec,#f9fdff 30%,#c2d8e3);
+  border:1px solid #a8bfcb;border-radius:0 0 10px 10px
+}
+.storage-integrated-v11 .sv11-vial-art .label{
+  background:white;margin-top:23px;padding:7px 2px;font-size:5px;text-align:center;
+  color:#597285;border-top:4px solid var(--sv11-host,#d4dce3)
+}
+.storage-integrated-v11 .sv11-badge{
+  display:inline-block;padding:4px 8px;font-size:11px;border-radius:5px;background:#edf2f7;color:#597083
+}
+.storage-integrated-v11 .sv11-badge.full{background:#e0f5e6;color:#287446}
+.storage-integrated-v11 .sv11-badge.empty{background:#ffe8e9;color:#a3424c}
+.storage-integrated-v11 .sv11-badge.half{background:#fff2d1;color:#8d691b}
+.storage-integrated-v11 .sv11-panel dl{margin:23px 0}
+.storage-integrated-v11 .sv11-panel dl>div{
+  display:grid;grid-template-columns:90px minmax(0,1fr);gap:9px;margin:12px 0;font-size:12px;line-height:1.5
+}
+.storage-integrated-v11 .sv11-panel dt{color:#778b9c}
+.storage-integrated-v11 .sv11-panel dd{margin:0;overflow-wrap:anywhere}
+.storage-integrated-v11 .sv11-panel>button{width:100%;margin:5px 0}
+.storage-integrated-v11 .sv11-panel .primary{background:var(--sv11-blue);color:white;border-color:var(--sv11-blue)}
+.storage-integrated-v11 .danger{color:#a33d49;border-color:#efc8cc;background:#fff9fa}
+.storage-integrated-v11 .sv11-panel-note{font-size:11px;color:#8b9bac;text-align:center}
+.storage-integrated-v11 .sv11-grid{
+  padding:25px;min-height:535px;overflow:auto
+}
+.storage-integrated-v11 .sv11-slot-grid{
+  display:grid;grid-template-columns:22px repeat(10,minmax(48px,1fr));gap:5px;min-width:600px
+}
+.storage-integrated-v11 .sv11-slot-grid .coordinate{
+  font-size:11px;text-align:center;padding:7px;color:#698197
+}
+.storage-integrated-v11 .sv11-slot-grid button{
+  height:44px;padding:4px;font-size:10px;overflow:hidden;font-weight:400
+}
+.storage-integrated-v11 .sv11-slot-grid button b{display:block;font-size:11px;margin-bottom:3px}
+.storage-integrated-v11 .sv11-slot-grid button.selected{outline:3px solid #118bea;outline-offset:-2px}
+.storage-integrated-v11 .sv11-slot-grid button.missing{
+  background:repeating-linear-gradient(45deg,#f4f6f8,#f4f6f8 5px,#e7ebef 5px,#e7ebef 7px)
+}
+.storage-integrated-v11 .sv11-warning{
+  padding:12px 14px;background:#fff6e9;color:#805a28;border:1px solid #f3dfbd;
+  border-radius:7px;margin-bottom:14px;font-size:12px;white-space:pre-wrap
+}
+.storage-integrated-v11 [hidden]{display:none!important}
+@media(min-width:1450px){
+  .storage-integrated-v11 .sv11-stage{height:610px}
+}
+@media(max-width:1050px){
+  .storage-integrated-v11 .sv11-workbench{grid-template-columns:minmax(0,1fr) 250px}
+  .storage-integrated-v11 .sv11-panel{padding:20px 15px}
+  .storage-integrated-v11 .sv11-toolbar{flex-wrap:wrap}
+  .storage-integrated-v11 .sv11-stage{height:450px}
+  .storage-integrated-v11 .sv11-box-card{padding:14px;gap:9px}
+  .storage-integrated-v11 .sv11-box-card .icon{display:none}
+}
+@media(max-width:760px){
+  .storage-integrated-v11 .sv11-workbench{grid-template-columns:1fr}
+  .storage-integrated-v11 .sv11-panel{border-left:0;border-top:1px solid var(--sv11-line)}
+  .storage-integrated-v11 .sv11-panel-empty{padding:20px}
+  .storage-integrated-v11 .sv11-box-cards{grid-template-columns:1fr;gap:8px}
+  .storage-integrated-v11 .sv11-box-card{padding:12px}
+  .storage-integrated-v11 .sv11-box-card .icon{display:grid}
+  .storage-integrated-v11 .sv11-heading{flex-wrap:wrap}
+  .storage-integrated-v11 .sv11-total{display:none}
+  .storage-integrated-v11 .sv11-stage{height:420px}
+}
