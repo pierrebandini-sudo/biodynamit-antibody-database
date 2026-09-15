@@ -1,0 +1,74 @@
+/* BioDynaMit v11.1.3 — Antibodies table desktop layout
+   Targeted visual patch: uses the available width and keeps all key columns visible. */
+
+.content:has(#abBody) {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.content:has(#abBody) .searchbar,
+.content:has(#abBody) .table-wrap {
+  width: 100%;
+}
+
+.content:has(#abBody) .table-wrap {
+  overflow-x: hidden;
+}
+
+.content:has(#abBody) .table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.content:has(#abBody) .table th,
+.content:has(#abBody) .table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  vertical-align: top;
+  line-height: 1.3;
+  padding: 10px 8px;
+}
+
+.content:has(#abBody) .table th:nth-child(1),
+.content:has(#abBody) .table td:nth-child(1) { width: 18%; }
+
+.content:has(#abBody) .table th:nth-child(2),
+.content:has(#abBody) .table td:nth-child(2) { width: 31%; }
+
+.content:has(#abBody) .table th:nth-child(3),
+.content:has(#abBody) .table td:nth-child(3) { width: 11%; }
+
+.content:has(#abBody) .table th:nth-child(4),
+.content:has(#abBody) .table td:nth-child(4) { width: 11%; }
+
+.content:has(#abBody) .table th:nth-child(5),
+.content:has(#abBody) .table td:nth-child(5) { width: 8%; }
+
+.content:has(#abBody) .table th:nth-child(6),
+.content:has(#abBody) .table td:nth-child(6) { width: 13%; }
+
+.content:has(#abBody) .table th:nth-child(7),
+.content:has(#abBody) .table td:nth-child(7) { width: 8%; }
+
+.content:has(#abBody) .table td:nth-child(5),
+.content:has(#abBody) .table td:nth-child(7) {
+  white-space: nowrap;
+}
+
+.content:has(#abBody) .pill {
+  white-space: nowrap;
+}
+
+@media (max-width: 1050px) {
+  .content:has(#abBody) .table-wrap {
+    overflow-x: auto;
+  }
+
+  .content:has(#abBody) .table {
+    min-width: 900px;
+  }
+}
