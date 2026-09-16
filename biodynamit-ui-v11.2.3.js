@@ -56,6 +56,15 @@
       }
       go(r);
     });
+
+    // Administration lives outside #nav in the HTML shell.
+    // Rebind it every time renderNav() runs so the v11.2.3 override
+    // does not disable the button.
+    const adminBtn=document.querySelector('.sidebar-bottom [data-route="admin"]');
+    if(adminBtn){
+      adminBtn.onclick=()=>go('admin');
+      adminBtn.classList.toggle('active',state.route==='admin');
+    }
   };
 
   function primaryActions(active,{add=false}={}){
