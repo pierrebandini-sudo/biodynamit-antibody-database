@@ -277,19 +277,25 @@
   function typeHeader(type,data){
     const cfg=typeConfig(type)||{Name:type,SingularName:'Élément',StorageEnabled:true};
     const view=ns.inventoryView[type]||'list';
-    topbar(cfg.Name||type,`<div class="row v112-top-actions">
-      <button class="btn ${view==='list'?'btn-primary':''}" data-v112-view="list">Liste</button>
+    const singular=String(cfg.SingularName||'Élément').trim();
+    // For the secondary Excel preview, importing the manifest must remain the
+    // first write. Once data are in Grist, manual creation is available.
+    const canAdd=state.connected && !(type===MANIFEST_TYPE && data.mode==='manifest');
+    topbar(cfg.Name||type,`<div class="row v112-top-actions v112-inventory-switch">
+      <button class="btn ${view==='list'||view==='detail'?'btn-primary':''}" data-v112-view="list">Liste</button>
       ${cfg.StorageEnabled!==false?`<button class="btn ${view==='storage'?'btn-primary':''}" data-v112-view="storage">Stockage</button>`:''}
+      ${canAdd?`<button class="btn btn-primary" data-v112-add-item>+ Ajouter un ${er(singular.toLowerCase())}</button>`:''}
     </div>`);
     return cfg;
   }
 
-  function bindTypeViews(type){
+  function bindTypeViews(type,data,cfg){
     document.querySelectorAll('[data-v112-view]').forEach(b=>b.onclick=()=>{
       ns.inventoryView[type]=b.dataset.v112View;
       ns.inventorySelected[type]=null;
       renderInventory(type);
     });
+    document.querySelector('[data-v112-add-item]')?.addEventListener('click',()=>showAddInventoryItem(type,data,cfg));
   }
 
   function renderInventory(type){
@@ -299,9 +305,110 @@
     if(view==='detail') renderItemDetail(type,data,cfg);
     else if(view==='storage') renderGenericStorage(type,data,cfg);
     else renderItemList(type,data,cfg);
-    bindTypeViews(type);
+    bindTypeViews(type,data,cfg);
   }
   ns.renderInventory=renderInventory;
+
+  function genericFieldInput(field){
+    const id=`v112NewItem_${field.FieldKey}`;
+    const label=er(field.Label||field.FieldKey);
+    const required=field.Required===true?' *':'';
+    const help=field.HelpText?`<small>${er(field.HelpText)}</small>`:'';
+    let control='';
+    if(field.DataType==='choice'){
+      const opts=(ns.choiceValues?.(field.ChoiceGroup)||[]).map(x=>`<option value="${er(x.Value)}">${er(x.Label||x.Value)}</option>`).join('');
+      control=`<select id="${er(id)}"><option value="">—</option>${opts}</select>`;
+    }else if(field.DataType==='number'){
+      control=`<input id="${er(id)}" type="number" step="any">`;
+    }else if(field.DataType==='date'){
+      control=`<input id="${er(id)}" type="date">`;
+    }else if(/info|comment|note|validation/i.test(String(field.FieldKey||''))){
+      control=`<textarea id="${er(id)}" rows="3"></textarea>`;
+    }else{
+      control=`<input id="${er(id)}" type="text">`;
+    }
+    return `<div class="field"><label>${label}${required}</label>${control}${help}</div>`;
+  }
+
+  function showAddInventoryItem(type,data,cfg){
+    if(!state.connected)return toast('Connexion Grist requise.');
+    if(type===MANIFEST_TYPE && data.mode==='manifest')return toast('Importe d’abord le stock secondaire dans Grist.');
+    const fields=(ns.fieldsFor?.(type)||[]).filter(f=>f.Active!==false&&f.Visible!==false).sort((a,b)=>Number(a.SortOrder||999)-Number(b.SortOrder||999));
+    const singular=String(cfg.SingularName||'élément').toLowerCase();
+    const isSecondary=type===MANIFEST_TYPE;
+    const codePrefix=isSecondary?'SEC-AB':type==='cell_stock'?'CELL':'ITEM';
+    const common=isSecondary?`
+      <div class="field"><label>Fournisseur</label><input id="v112NewItemSupplier"></div>
+      <div class="field"><label>Référence catalogue</label><input id="v112NewItemCatalog"></div>
+      <div class="field"><label>Température de stockage</label><input id="v112NewItemStorage" placeholder="-20°C, +4°C…"></div>
+      <div class="field"><label>Lien fournisseur</label><input id="v112NewItemWebsite" type="url" placeholder="https://…"></div>`:'';
+    modal(`<h2>Ajouter un ${er(singular)}</h2>
+      <p class="subtitle">Création dans l’inventaire ${er(cfg.Name||type)}. Les autres inventaires ne sont pas modifiés.</p>
+      <div class="v112-form-grid">
+        <div class="field"><label>Nom *</label><input id="v112NewItemName" autocomplete="off"></div>
+        <div class="field"><label>Code *</label><input id="v112NewItemCode" value="${er(generatedCode(codePrefix))}"></div>
+        ${common}
+        ${fields.map(genericFieldInput).join('')}
+        <div class="field v112-span2"><label>Commentaires</label><textarea id="v112NewItemComments" rows="3"></textarea></div>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn" id="v112NewItemCancel">Annuler</button><button class="btn btn-primary" id="v112NewItemSave">Ajouter</button></div>`);
+    $('#v112NewItemCancel').onclick=closeModal;
+    $('#v112NewItemSave').onclick=async()=>{
+      const name=$('#v112NewItemName').value.trim(),code=$('#v112NewItemCode').value.trim();
+      if(!name||!code)return toast('Nom et code obligatoires.');
+      if(trows('InventoryItems').some(x=>core.normalizeText(x.Code)===core.normalizeText(code)))return toast('Ce code existe déjà.');
+      const requiredMissing=fields.find(f=>f.Required===true&&!String(document.getElementById(`v112NewItem_${f.FieldKey}`)?.value||'').trim());
+      if(requiredMissing)return toast(`${requiredMissing.Label||requiredMissing.FieldKey} est obligatoire.`);
+      if(isSecondary){
+        const catalog=$('#v112NewItemCatalog')?.value.trim()||'';
+        const duplicate=trows('InventoryItems').find(x=>x.InventoryType===type && core.normalizeText(x.Name)===core.normalizeText(name) && catalog && core.normalizeText(x.CatalogNumber)===core.normalizeText(catalog));
+        if(duplicate)return toast('Une référence secondaire avec ce nom et ce catalogue existe déjà.');
+      }
+      const record={Code:code,InventoryType:type,Name:name,Status:'Actif',Active:true,Comments:$('#v112NewItemComments').value.trim(),RawTable:'Ajout manuel'};
+      if(isSecondary){
+        record.Supplier=$('#v112NewItemSupplier').value.trim();
+        record.CatalogNumber=$('#v112NewItemCatalog').value.trim();
+        record.StorageTemperature=$('#v112NewItemStorage').value.trim();
+        record.Website=$('#v112NewItemWebsite').value.trim();
+      }
+      const columnMap={target:'Target',targetSpecies:'TargetSpecies',hostSpecies:'HostSpecies',fluorophore:'Fluorophore',excitation_nm:'Excitation_nm',emission_nm:'Emission_nm',class:'Class',supplier:'Supplier',catalogNumber:'CatalogNumber',storageTemperature:'StorageTemperature',website:'Website'};
+      for(const f of fields){
+        if(f.StorageMode!=='column')continue;
+        const el=document.getElementById(`v112NewItem_${f.FieldKey}`),raw=el?.value??'';
+        const col=f.ColumnName||columnMap[f.FieldKey];if(!col)continue;
+        record[col]=f.DataType==='number'?(raw===''?null:Number(raw)):raw;
+      }
+      try{
+        await grist.docApi.applyUserActions([['AddRecord','InventoryItems',null,record]]);
+        await loadAll();
+        const created=trows('InventoryItems').find(x=>x.Code===code&&x.InventoryType===type);
+        if(!created)throw Error('Élément créé mais introuvable après relecture.');
+        const attrs=[];
+        for(const f of fields){
+          if(f.StorageMode==='column')continue;
+          const el=document.getElementById(`v112NewItem_${f.FieldKey}`),raw=el?.value??'';
+          if(raw==='')continue;
+          const a={Item:Number(created.id),InventoryType:type,FieldKey:f.FieldKey,Source:'Ajout manuel'};
+          if(f.DataType==='number')a.ValueNumber=Number(raw);
+          else if(f.DataType==='date')a.ValueDate=Date.parse(`${raw}T00:00:00`)/1000;
+          else if(f.DataType==='bool')a.ValueBool=raw==='true';
+          else a.ValueText=raw;
+          attrs.push(a);
+        }
+        const actions=[];
+        if(attrs.length){
+          const cols=[...new Set(attrs.flatMap(Object.keys))];
+          const vals=Object.fromEntries(cols.map(c=>[c,attrs.map(a=>a[c]??null)]));
+          actions.push(['BulkAddRecord','InventoryAttributes',Array(attrs.length).fill(null),vals]);
+        }
+        actions.push(['AddRecord','InventoryHistory',null,{Date:Date.now()/1000,InventoryType:type,Action:'Ajout manuel',EntityType:'Item',EntityCode:code,Details:name,User:'Grist'}]);
+        await grist.docApi.applyUserActions(actions);
+        closeModal();await loadAll();
+        ns.inventorySelected[type]=Number(created.id);ns.inventoryView[type]='detail';
+        toast(`${cfg.SingularName||'Élément'} ajouté.`);renderInventory(type);
+      }catch(err){console.error(err);toast(`Erreur : ${err.message||err}`);}
+    };
+  }
 
   function importBanner(type,data){
     if(type!==MANIFEST_TYPE || data.mode!=='manifest') return '';
@@ -623,6 +730,9 @@
     const box=buildBox(data,container);
     const can3d=Number(container.rows)===10&&Number(container.columns)===10;
     const unitLabel=cfg.UnitLabel||'unité';
+    const vialLike=/vial|flacon/i.test(String(unitLabel));
+    const displayUnit=vialLike?'flacon':String(unitLabel).toLowerCase();
+    const subject=type===MANIFEST_TYPE?'anticorps secondaire':(cfg.SingularName||'élément').toLowerCase();
     const located=data.positions.filter(p=>p.unitCode).length;
     const totalCapacity=data.containers.reduce((n,c)=>n+Number(c.rows||10)*Number(c.columns||10),0);
 
@@ -630,10 +740,10 @@
       <div class="v112-storage-hero">
         <div>
           <div class="v112-storage-kicker">STOCKAGE DU LABORATOIRE</div>
-          <h1 class="page-title">Chaque ${er(unitLabel.toLowerCase())} à sa place.</h1>
-          <p class="subtitle">Explore les boîtes de ${er(cfg.Name||type).toLowerCase()}, retrouve une référence et organise son emplacement.</p>
+          <h1 class="page-title">Chaque ${er(displayUnit)} à sa place.</h1>
+          <p class="subtitle">Explore les boîtes, retrouve un ${er(subject)} et organise son emplacement.</p>
         </div>
-        <div class="v112-storage-total"><strong>${located}</strong><span>${er(unitLabel.toLowerCase())}${located>1?'s':''} localisé${located>1?'s':''}<br>dans les boîtes</span></div>
+        <div class="v112-storage-total"><strong>${located}</strong><span>${er(displayUnit)}${located>1?'s':''} localisé${located>1?'s':''}<br>dans les boîtes</span></div>
       </div>
       ${importBanner(type,data)}
       <div class="v112-storage-box-row">
@@ -680,7 +790,7 @@
           </div>
         </div>
       </section>
-      <p class="v112-storage-footnote">${located} ${er(unitLabel.toLowerCase())}${located>1?'s':''} positionné${located>1?'s':''} sur ${totalCapacity} emplacements disponibles dans cet inventaire.</p>`;
+      <p class="v112-storage-footnote">${located} ${er(displayUnit)}${located>1?'s':''} positionné${located>1?'s':''} sur ${totalCapacity} emplacements disponibles dans cet inventaire.</p>`;
 
     $('#v112ImportSecondary')?.addEventListener('click',showSecondaryImport);
     document.querySelectorAll('[data-v112-box]').forEach(b=>b.onclick=()=>{
@@ -709,7 +819,7 @@
     const horizontalLetters=box.GridOrientation==='letters-columns';
     let html='';
     if(horizontalLetters){
-      html=`<div class="v112-slot-grid v112-slot-grid-excel" style="grid-template-columns:34px repeat(${box.Rows},minmax(58px,1fr))"><span></span>`;
+      html=`<div class="v112-slot-grid v112-slot-grid-excel" style="grid-template-columns:34px repeat(${box.Rows},minmax(0,1fr))"><span></span>`;
       for(let c=0;c<box.Rows;c++) html+=`<span class="coordinate">${String.fromCharCode(65+c)}</span>`;
       for(let r=1;r<=box.Columns;r++){
         html+=`<span class="coordinate">${r}</span>`;
@@ -720,7 +830,7 @@
         }
       }
     }else{
-      html=`<div class="v112-slot-grid" style="grid-template-columns:34px repeat(${box.Columns},minmax(58px,1fr))"><span></span>`;
+      html=`<div class="v112-slot-grid" style="grid-template-columns:34px repeat(${box.Columns},minmax(0,1fr))"><span></span>`;
       for(let c=1;c<=box.Columns;c++) html+=`<span class="coordinate">${c}</span>`;
       for(let r=0;r<box.Rows;r++){
         html+=`<span class="coordinate">${String.fromCharCode(65+r)}</span>`;
