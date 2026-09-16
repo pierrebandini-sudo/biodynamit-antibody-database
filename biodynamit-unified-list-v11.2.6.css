@@ -1,0 +1,118 @@
+/* BioDynaMit v11.2.6 — exact list parity for primary + secondary antibodies. */
+
+.u126-antibody-list{
+  width:100%;
+  min-width:0;
+}
+.u126-table-wrap{
+  width:100%;
+  max-width:100%;
+  overflow:hidden!important;
+}
+.u126-table{
+  width:100%!important;
+  min-width:0!important;
+  table-layout:fixed!important;
+}
+.u126-table col.c-name{width:18%}
+.u126-table col.c-target{width:15%}
+.u126-table col.c-spec{width:17%}
+.u126-table col.c-host{width:9%}
+.u126-table col.c-supplier{width:12%}
+.u126-table col.c-ref{width:11%}
+.u126-table col.c-stock{width:10%}
+.u126-table col.c-qc{width:8%}
+
+.u126-table th,
+.u126-table td{
+  min-width:0!important;
+  box-sizing:border-box;
+  vertical-align:middle!important;
+  overflow:hidden;
+}
+.u126-table th{
+  white-space:nowrap;
+  font-size:11px;
+}
+.u126-table td{
+  font-size:12px;
+}
+.u126-table tr{
+  min-height:58px;
+}
+.u126-clamp{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-clamp:2;
+  overflow:hidden;
+  overflow-wrap:anywhere;
+  line-height:1.3;
+  max-height:2.6em;
+}
+.u126-col-name .u125-link-btn{
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.u126-col-stock{
+  overflow:visible!important;
+}
+.u126-col-stock .pill,
+.u126-col-qc .pill{
+  display:inline-flex;
+  max-width:100%;
+  font-size:10px;
+  white-space:nowrap;
+}
+.u126-locate{
+  display:block!important;
+  margin-top:5px!important;
+  padding:4px 6px!important;
+  font-size:9px!important;
+  white-space:nowrap;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* Exact same metric-card geometry for both lists. */
+.u126-antibody-list .u125-metrics{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:12px!important;
+}
+.u126-antibody-list .u125-metrics .card{
+  min-width:0;
+  min-height:72px!important;
+}
+
+/* Same search size and vertical rhythm. */
+.u126-antibody-list .searchbar{
+  width:100%;
+}
+.u126-antibody-list .page-title{
+  margin-bottom:4px!important;
+}
+.u126-antibody-list > .subtitle{
+  margin-top:0!important;
+}
+
+/* Quality pill states */
+.u125-qc-pill.bad{background:#ffe6e8!important;color:#9d3341!important}
+.u125-qc-pill.warn{background:#fff1c9!important;color:#74570f!important}
+.u125-qc-pill.neutral{background:#edf3f7!important;color:#526b80!important}
+.u125-qc-pill.ok{background:#dcf5e6!important;color:#226840!important}
+
+/* Mid-width: keep parity and allow horizontal scroll only when truly needed,
+   rather than clipping columns off-screen. */
+@media(max-width:1100px){
+  .u126-table-wrap{overflow-x:auto!important}
+  .u126-table{min-width:930px!important}
+}
+@media(max-width:760px){
+  .u126-antibody-list .u125-metrics{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+}
