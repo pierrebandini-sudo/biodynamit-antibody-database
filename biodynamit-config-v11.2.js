@@ -79,12 +79,16 @@
     ],
     InventoryContainers:[
       {id:'Code',type:'Text'},{id:'InventoryType',type:'Text'},{id:'Name',type:'Text'},{id:'Temperature',type:'Text'},
-      {id:'Rack',type:'Text'},{id:'Rows',type:'Int'},{id:'Columns',type:'Int'},{id:'Notes',type:'Text'},{id:'Active',type:'Bool'}
+      {id:'Rack',type:'Text'},{id:'Rows',type:'Int'},{id:'Columns',type:'Int'},
+      {id:'GridOrientation',type:'Text'},{id:'StorageProfile',type:'Text'},{id:'DisplayStyle',type:'Text'},{id:'Subtitle',type:'Text'},
+      {id:'Notes',type:'Text'},{id:'Active',type:'Bool'}
     ],
     InventoryUnits:[
       {id:'Code',type:'Text'},{id:'InventoryType',type:'Text'},{id:'Item',type:'Ref:InventoryItems'},{id:'FillStatus',type:'Text'},
       {id:'EstimatedVolume_uL',type:'Numeric'},{id:'Status',type:'Text'},{id:'DateReceived',type:'Date'},{id:'Comments',type:'Text'},
       {id:'RawLabel',type:'Text'},{id:'MatchStatus',type:'Text'},{id:'MatchScore',type:'Numeric'},{id:'CandidateItemCode',type:'Text'},
+      {id:'DetectedHost',type:'Text'},{id:'DetectedTargetSpecies',type:'Text'},{id:'DetectedFluorophore',type:'Text'},
+      {id:'StockMarker',type:'Bool'},{id:'DateLabel',type:'Text'},
       {id:'RawTable',type:'Text'},{id:'RawCell',type:'Text'}
     ],
     InventoryPositions:[
@@ -94,6 +98,10 @@
     InventoryDocuments:[
       {id:'Item',type:'Ref:InventoryItems'},{id:'InventoryType',type:'Text'},{id:'Title',type:'Text'},{id:'Type',type:'Text'},
       {id:'Link',type:'Text'},{id:'Notes',type:'Text'}
+    ],
+    InventoryNotes:[
+      {id:'Item',type:'Ref:InventoryItems'},{id:'InventoryType',type:'Text'},{id:'Date',type:'DateTime'},
+      {id:'Author',type:'Text'},{id:'Text',type:'Text'},{id:'AttachmentLink',type:'Text'}
     ],
     InventoryHistory:[
       {id:'Date',type:'DateTime'},{id:'InventoryType',type:'Text'},{id:'Action',type:'Text'},{id:'EntityType',type:'Text'},
@@ -110,7 +118,7 @@
     'InventoryTypes','FieldDefinitions','ChoiceOptions','SupplierConfig','Synonyms','FeatureFlags',
     'AutomationRules','AlertRules','WatchProfiles','WatchTerms','WatchScoring','ImportProfiles','ConfigVersions',
     'InventoryItems','InventoryAttributes','InventoryContainers','InventoryUnits','InventoryPositions',
-    'InventoryDocuments','InventoryHistory','EnrichmentQueue'
+    'InventoryDocuments','InventoryNotes','InventoryHistory','EnrichmentQueue'
   ];
 
   const CONFIG_TABLES=new Set([
@@ -122,7 +130,7 @@
     InventoryTypes:[
       {Key:'primary_antibody',Name:'Anticorps primaires',SingularName:'Anticorps primaire',Icon:'Y',Mode:'legacy',Enabled:true,StorageEnabled:true,TemperatureHint:'-20°C / +4°C',UnitLabel:'Vial',SortOrder:10,Notes:'BDD historique conservée sans migration.'},
       {Key:'secondary_antibody',Name:'Anticorps secondaires',SingularName:'Anticorps secondaire',Icon:'S',Mode:'generic',Enabled:true,StorageEnabled:true,TemperatureHint:'-20°C / +4°C',UnitLabel:'Vial',SortOrder:20,Notes:'Inventaire générique alimenté par le fichier BDMIT secondary antibodies 2025.xlsx.'},
-      {Key:'cell_stock',Name:'Cellules -80 °C',SingularName:'Stock cellulaire',Icon:'C',Mode:'generic',Enabled:false,StorageEnabled:true,TemperatureHint:'-80°C',UnitLabel:'Cryovial',SortOrder:30,Notes:'Structure préparée. Activation après réception/validation des données cellules.'}
+      {Key:'cell_stock',Name:'Cellules',SingularName:'Stock cellulaire',Icon:'C',Mode:'generic',Enabled:false,StorageEnabled:true,TemperatureHint:'-80°C',UnitLabel:'Cryovial',SortOrder:30,Notes:'Structure préparée. La rubrique apparaît automatiquement après activation/import des données cellules.'}
     ],
     FeatureFlags:[
       {Key:'config_driven_nav',Enabled:true,Value:'',Scope:'app',Description:'Affiche automatiquement les inventaires activés dans InventoryTypes.'},

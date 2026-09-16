@@ -11,6 +11,7 @@
   ns.inventoryView=ns.inventoryView||{};
   ns.inventorySearch=ns.inventorySearch||{};
   ns.inventorySelected=ns.inventorySelected||{};
+  ns.inventoryDetailTab=ns.inventoryDetailTab||{};
   ns.storageState=ns.storageState||{};
   ns.sceneModule=null;
   ns.genericScene=null;
@@ -18,9 +19,76 @@
   const palette=core.DEFAULT_PALETTE;
   const MANIFEST_TYPE='secondary_antibody';
 
+  // v11.2.2 — visual/storage metadata for secondary antibodies.
+  // -20 °C Excel boxes use letters A–J horizontally and rows 1–10 vertically.
+  // The +4 °C box uses the legacy orientation (letters vertically, numbers horizontally).
+  const SECONDARY_FLUOR_COLORS={
+    'af350':'#6f8ff1','d350':'#6f8ff1','d405':'#5f80e9',
+    'af488':'#6fc255','bodipy':'#f0a43b','af555':'#ef6464',
+    'af568':'#f08d91','af594':'#9b69d8','d649':'#54a9cf',
+    'dylight649':'#54a9cf','af647':'#e75b6b','cy5':'#39a7d8',
+    'cydye800':'#6f7fdc'
+  };
+
+  function fluorKey(v){
+    return core.normalizeText(v||'').replace(/\s+/g,'').replace(/dyelight/g,'dylight');
+  }
+
+  function secondaryColor(item,unit){
+    const key=fluorKey(item?.fluorophore||unit?.detectedFluorophore||'');
+    return SECONDARY_FLUOR_COLORS[key]||'#d4dce3';
+  }
+
+  function orientationFromNotes(notes=''){
+    const m=String(notes).match(/Layout\s*:\s*([a-z-]+)/i);
+    return m?.[1]||'';
+  }
+
+  function defaultContainerOrientation(code,notes=''){
+    const explicit=orientationFromNotes(notes);
+    if(explicit)return explicit;
+    if(/^SEC-BOX-20-0[12]$/i.test(String(code||'')))return 'letters-columns';
+    return 'letters-rows';
+  }
+
+  function sceneBoxForOrientation(box){
+    if(box.GridOrientation!=='letters-columns') return {sceneBox:box,rawToScene:new Map()};
+    const slots=new Map(),rawToScene=new Map();
+    for(const p of box.slots.values()){
+      // Raw A1/B1/... is displayed with the letter on the horizontal axis.
+      const vr=p.col, vc=p.row;
+      const sceneKey=String.fromCharCode(65+vr)+(vc+1);
+      rawToScene.set(p.Slot,sceneKey);
+      slots.set(sceneKey,{...p,row:vr,col:vc});
+    }
+    return {sceneBox:{...box,slots},rawToScene};
+  }
+
+  function storageLegend(data,box){
+    const seen=new Map();
+    for(const p of box.slots.values()){
+      if(!p.occupied)continue;
+      const f=p.antibody?.fluorophore||p.vial?.detectedFluorophore||'Non renseigné';
+      const key=core.normalizeText(f)||'unknown';
+      if(!seen.has(key))seen.set(key,{label:f||'Non renseigné',color:p.color});
+    }
+    if(!seen.size)return '';
+    return [...seen.values()].map(x=>`<span class="v112-storage-legend-item"><i style="background:${er(x.color)}"></i>${er(x.label)}</span>`).join('');
+  }
+
   function er(v){ return esc(v); }
   function trows(name){ return rows(state.data[name]||ns.data?.[name]); }
-  function typeConfig(key){ return ns.inventoryTypes?.().find(x=>x.Key===key) || null; }
+  function tableHasFields(name,fields){
+    const table=state.data[name]||ns.data?.[name];
+    if(!table)return false;
+    return fields.every(k=>Object.prototype.hasOwnProperty.call(table,k) || trows(name).some(r=>Object.prototype.hasOwnProperty.call(r,k)));
+  }
+  function typeConfig(key){
+    const cfg=ns.inventoryTypes?.().find(x=>x.Key===key) || null;
+    if(!cfg)return null;
+    if(key==='cell_stock' && (!cfg.Name || cfg.Name==='Cellules -80 °C')) return {...cfg,Name:'Cellules'};
+    return cfg;
+  }
   function isGristType(type){ return trows('InventoryItems').some(x=>x.InventoryType===type); }
   function manifest(){ return window.BioDynaMitSecondary2025||null; }
 
@@ -71,7 +139,9 @@
       id:Number(r.id),code:r.Code||`UNIT-${r.id}`,inventoryType:r.InventoryType,itemId:item?.id||null,itemCode:item?.code||'',
       item,fillStatus:r.FillStatus||'',estimatedVolume_uL:r.EstimatedVolume_uL,status:r.Status||'',
       dateReceived:r.DateReceived,comments:r.Comments||'',rawLabel:r.RawLabel||'',matchStatus:r.MatchStatus||'',
-      matchScore:r.MatchScore,candidateItemCode:r.CandidateItemCode||'',source:'grist',raw:r
+      matchScore:r.MatchScore,candidateItemCode:r.CandidateItemCode||'',
+      detectedHost:r.DetectedHost||'',detectedTargetSpecies:r.DetectedTargetSpecies||'',detectedFluorophore:r.DetectedFluorophore||'',
+      stockMarker:r.StockMarker===true,dateLabel:r.DateLabel||'',source:'grist',raw:r
     };
   }
 
@@ -103,12 +173,21 @@
 
   function containersFor(type){
     const live=trows('InventoryContainers').filter(x=>x.InventoryType===type);
-    if(live.length) return live.map(r=>({
-      id:Number(r.id),code:r.Code||`BOX-${r.id}`,inventoryType:r.InventoryType,name:r.Name||r.Code,
-      temperature:r.Temperature||'',temperatureNumeric:Number(String(r.Temperature||'').match(/-?\d+/)?.[0]||NaN),
-      rack:r.Rack||'',rows:Number(r.Rows||10),columns:Number(r.Columns||10),notes:r.Notes||'',source:'grist',raw:r
+    if(live.length) return live.map(r=>{
+      const fallback=type===MANIFEST_TYPE?manifest()?.containers?.find(c=>c.code===r.Code):null;
+      return {
+        id:Number(r.id),code:r.Code||`BOX-${r.id}`,inventoryType:r.InventoryType,name:r.Name||r.Code,
+        temperature:r.Temperature||'',temperatureNumeric:Number(String(r.Temperature||'').match(/-?\d+/)?.[0]||NaN),
+        rack:r.Rack||'',rows:Number(r.Rows||10),columns:Number(r.Columns||10),notes:r.Notes||'',
+        gridOrientation:orientationFromNotes(r.Notes||'')||fallback?.gridOrientation||defaultContainerOrientation(r.Code,r.Notes||''),
+        subtitle:String(r.Notes||'').match(/Subtitle\s*:\s*([^|]+)/i)?.[1]?.trim()||fallback?.subtitle||'',
+        source:'grist',raw:r
+      };
+    });
+    if(type===MANIFEST_TYPE && manifest()) return manifest().containers.map(x=>({
+      ...x,id:x.code,gridOrientation:x.gridOrientation||defaultContainerOrientation(x.code,''),
+      source:'manifest'
     }));
-    if(type===MANIFEST_TYPE && manifest()) return manifest().containers.map(x=>({...x,id:x.code,source:'manifest'}));
     return [];
   }
 
@@ -308,6 +387,31 @@
     return data.items.find(x=>String(x.id)===String(id)||String(x.code)===String(id))||null;
   }
 
+  function itemDocuments(type,item){
+    if(typeof item.id!=='number') return [];
+    return trows('InventoryDocuments').filter(x=>Number(x.Item)===Number(item.id) && x.InventoryType===type);
+  }
+
+  function itemNotes(type,item){
+    if(typeof item.id!=='number') return [];
+    return trows('InventoryNotes').filter(x=>Number(x.Item)===Number(item.id) && x.InventoryType===type);
+  }
+
+  function itemHistory(type,item,units){
+    const codes=new Set([item.code,...units.map(u=>u.code)]);
+    return trows('InventoryHistory').filter(x=>x.InventoryType===type && (codes.has(x.EntityCode)||x.EntityCode===type)).slice().reverse();
+  }
+
+  function humanDate(v){
+    if(v===null||v===undefined||v==='')return '—';
+    try{
+      const n=Number(v);
+      const d=Number.isFinite(n) ? new Date(n>1e12?n:n*1000) : new Date(v);
+      if(Number.isNaN(d.getTime()))return String(v);
+      return d.toLocaleDateString('fr-FR');
+    }catch(_){return String(v);}
+  }
+
   function renderItemDetail(type,data,cfg){
     const item=selectedItem(data,type);
     if(!item){ ns.inventoryView[type]='list'; renderInventory(type); return; }
@@ -315,45 +419,129 @@
     const candidateUnits=data.units.filter(u=>!u.itemCode&&u.candidateItemCode===item.code);
     const fields=ns.fieldsFor?.(type)||[];
     const attrs=item.attributes||{};
+    const docs=itemDocuments(type,item),notes=itemNotes(type,item),hist=itemHistory(type,item,units);
+    const tab=ns.inventoryDetailTab[type]||'overview';
+
+    let body='';
+    if(tab==='vials'){
+      body=`<div class="card card-pad">
+        <div class="row space-between"><h3 class="section-title">Vials / unités</h3>${data.mode==='grist'?'<button class="btn btn-primary" id="v112AddUnitFromItem">+ Ajouter un vial</button>':''}</div>
+        ${units.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Code</th><th>Remplissage</th><th>Volume</th><th>Statut</th><th>Localisation</th><th></th></tr></thead><tbody>
+          ${units.map(u=>{const loc=unitLocation(data,u);return `<tr><td>${er(u.code)}</td><td>${er(u.fillStatus||'—')}</td><td>${u.estimatedVolume_uL===null||u.estimatedVolume_uL===undefined?'—':`${er(u.estimatedVolume_uL)} µL`}</td><td>${er(u.status||'—')}</td><td>${er(loc||'—')}</td><td>${loc?`<button class="btn btn-sm" data-v112-locate="${er(u.code)}">Voir dans le stockage</button>`:''}</td></tr>`}).join('')}
+        </tbody></table></div>`:'<div class="empty">Aucun vial relié.</div>'}
+        ${candidateUnits.length?`<p class="subtitle" style="margin-top:12px">${candidateUnits.length} rapprochement(s) supplémentaire(s) restent à valider.</p>`:''}
+      </div>`;
+    }else if(tab==='documents'){
+      body=`<div class="card card-pad">
+        <div class="row space-between"><h3 class="section-title">Documents</h3>${data.mode==='grist'?'<button class="btn btn-primary" id="v112AddDocument">+ Ajouter un document</button>':''}</div>
+        ${docs.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Titre</th><th>Type</th><th>Notes</th><th></th></tr></thead><tbody>${docs.map(d=>`<tr><td>${er(d.Title||'Document')}</td><td>${er(d.Type||'—')}</td><td>${er(d.Notes||'')}</td><td>${d.Link?`<a class="btn btn-sm" href="${er(d.Link)}" target="_blank" rel="noopener noreferrer">Ouvrir ↗</a>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Aucun document associé.</div>'}
+      </div>`;
+    }else if(tab==='notes'){
+      body=`<div class="card card-pad">
+        <div class="row space-between"><h3 class="section-title">Notes</h3>${data.mode==='grist'&&state.tables.includes('InventoryNotes')?'<button class="btn btn-primary" id="v112AddNote">+ Ajouter une note</button>':''}</div>
+        ${notes.length?`<div class="v112-note-list">${notes.slice().reverse().map(n=>`<article class="v112-note-card"><div class="row space-between"><b>${er(n.Author||'Laboratoire')}</b><small>${er(humanDate(n.Date))}</small></div><p>${er(n.Text||'')}</p>${n.AttachmentLink?`<a class="btn btn-sm" href="${er(n.AttachmentLink)}" target="_blank" rel="noopener noreferrer">Pièce jointe ↗</a>`:''}</article>`).join('')}</div>`:'<div class="empty">Aucune note.</div>'}
+      </div>`;
+    }else if(tab==='history'){
+      body=`<div class="card card-pad"><h3 class="section-title">Historique</h3>
+        ${hist.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Action</th><th>Élément</th><th>Détails</th></tr></thead><tbody>${hist.map(h=>`<tr><td>${er(humanDate(h.Date))}</td><td>${er(h.Action||'')}</td><td>${er(h.EntityCode||'')}</td><td>${er(h.Details||'')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Aucun historique associé.</div>'}
+      </div>`;
+    }else{
+      body=`<div class="split">
+        <div class="card card-pad"><h3 class="section-title">Informations générales</h3>
+          <dl class="detail-list">
+            <dt>Cible / espèce cible</dt><dd>${er(item.targetSpecies||item.target||'—')}</dd>
+            <dt>Fluorophore</dt><dd>${er(item.fluorophore||'—')}</dd>
+            <dt>Ex / Em</dt><dd>${er(item.excitation_nm??'—')} / ${er(item.emission_nm??'—')} nm</dd>
+            <dt>Espèce hôte</dt><dd>${er(item.hostSpecies||'—')}</dd>
+            <dt>Classe</dt><dd>${er(item.class||'—')}</dd>
+            <dt>Fournisseur</dt><dd>${er(item.supplier||'—')}</dd>
+            <dt>Référence</dt><dd>${er(item.catalogNumber||'—')}</dd>
+            <dt>Température</dt><dd>${er(item.storageTemperature||'—')}</dd>
+            <dt>Statut</dt><dd>${er(item.status||'—')}</dd>
+            <dt>Commentaires</dt><dd>${er(item.comments||'—')}</dd>
+          </dl>
+          ${item.website?`<a class="btn" href="${er(item.website)}" target="_blank" rel="noopener noreferrer">Fiche fournisseur ↗</a>`:''}
+        </div>
+        <div class="card card-pad"><h3 class="section-title">Stock</h3>
+          <p><span class="pill ${units.length?'ok':'neutral'}">${units.length} vial(s) relié(s)</span> ${candidateUnits.length?`<span class="pill warn">${candidateUnits.length} rapprochement(s) à valider</span>`:''}</p>
+          ${units.length?`<table class="table"><thead><tr><th>Code</th><th>État</th><th>Position</th></tr></thead><tbody>${units.slice(0,8).map(u=>`<tr><td>${er(u.code)}</td><td>${er(u.status||u.fillStatus||'')}</td><td>${er(unitLocation(data,u)||'—')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Aucun vial relié.</div>'}
+          <div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="btn" id="v112SuggestSlot">Suggérer une position</button>${data.mode==='grist'?'<button class="btn btn-primary" id="v112AddUnitFromItem">+ Ajouter un vial</button>':''}</div>
+        </div>
+      </div>
+      <div class="card card-pad" style="margin-top:16px"><h3 class="section-title">Champs configurables</h3>
+        ${fields.length?`<dl class="detail-list">${fields.map(f=>{
+          let v='';
+          if(f.StorageMode==='column'){
+            const map={TargetSpecies:'targetSpecies',Fluorophore:'fluorophore',Excitation_nm:'excitation_nm',Emission_nm:'emission_nm',HostSpecies:'hostSpecies',Class:'class',Supplier:'supplier',CatalogNumber:'catalogNumber',StorageTemperature:'storageTemperature',Website:'website'};
+            v=item[map[f.ColumnName]||f.FieldKey];
+          }else v=attrs[f.FieldKey];
+          return `<dt>${er(f.Label)}</dt><dd>${er(v??'—')}</dd>`;
+        }).join('')}</dl>`:'<div class="empty">Aucun FieldDefinition pour ce type.</div>'}
+      </div>`;
+    }
+
     content.innerHTML=`<div class="row space-between">
       <div><button class="btn btn-sm" id="v112BackList">← Liste</button><h1 class="page-title" style="margin-top:12px">${er(item.name)}</h1>
       <p class="subtitle">${er(item.supplier||'')} ${item.catalogNumber?`· Réf. ${er(item.catalogNumber)}`:''}</p></div>
-      <div class="row"><button class="btn" id="v112SuggestSlot">Suggérer une position</button>${data.mode==='grist'?'<button class="btn btn-primary" id="v112AddUnitFromItem">+ Ajouter un vial</button>':''}</div>
     </div>
-    <div class="split">
-      <div class="card card-pad"><h3 class="section-title">Informations générales</h3>
-        <dl class="detail-list">
-          <dt>Cible / espèce cible</dt><dd>${er(item.targetSpecies||item.target||'—')}</dd>
-          <dt>Fluorophore</dt><dd>${er(item.fluorophore||'—')}</dd>
-          <dt>Ex / Em</dt><dd>${er(item.excitation_nm??'—')} / ${er(item.emission_nm??'—')} nm</dd>
-          <dt>Espèce hôte</dt><dd>${er(item.hostSpecies||'—')}</dd>
-          <dt>Classe</dt><dd>${er(item.class||'—')}</dd>
-          <dt>Fournisseur</dt><dd>${er(item.supplier||'—')}</dd>
-          <dt>Référence</dt><dd>${er(item.catalogNumber||'—')}</dd>
-          <dt>Température</dt><dd>${er(item.storageTemperature||'—')}</dd>
-          <dt>Statut</dt><dd>${er(item.status||'—')}</dd>
-        </dl>
-        ${item.website?`<a class="btn" href="${er(item.website)}" target="_blank" rel="noopener noreferrer">Fiche fournisseur ↗</a>`:''}
-      </div>
-      <div class="card card-pad"><h3 class="section-title">Stock</h3>
-        <p><span class="pill ok">${units.length} vial(s) relié(s)</span> ${candidateUnits.length?`<span class="pill warn">${candidateUnits.length} rapprochement(s) à valider</span>`:''}</p>
-        ${units.length?`<table class="table"><thead><tr><th>Code</th><th>État</th><th>Position</th></tr></thead><tbody>${units.map(u=>`<tr><td>${er(u.code)}</td><td>${er(u.status||u.fillStatus||'')}</td><td>${er(unitLocation(data,u)||'—')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Aucun vial relié.</div>'}
-      </div>
+    <div class="tabs v112-detail-tabs">
+      <div class="tab ${tab==='overview'?'active':''}" data-v112-detail-tab="overview">Vue d'ensemble</div>
+      <div class="tab ${tab==='vials'?'active':''}" data-v112-detail-tab="vials">Vials (${units.length})</div>
+      <div class="tab ${tab==='documents'?'active':''}" data-v112-detail-tab="documents">Documents (${docs.length})</div>
+      <div class="tab ${tab==='notes'?'active':''}" data-v112-detail-tab="notes">Notes (${notes.length})</div>
+      <div class="tab ${tab==='history'?'active':''}" data-v112-detail-tab="history">Historique</div>
     </div>
-    <div class="card card-pad" style="margin-top:16px"><h3 class="section-title">Champs configurables</h3>
-      ${fields.length?`<dl class="detail-list">${fields.map(f=>{
-        let v='';
-        if(f.StorageMode==='column'){
-          const map={TargetSpecies:'targetSpecies',Fluorophore:'fluorophore',Excitation_nm:'excitation_nm',Emission_nm:'emission_nm',HostSpecies:'hostSpecies',Class:'class',Supplier:'supplier',CatalogNumber:'catalogNumber',StorageTemperature:'storageTemperature',Website:'website'};
-          v=item[map[f.ColumnName]||f.FieldKey];
-        }else v=attrs[f.FieldKey];
-        return `<dt>${er(f.Label)}</dt><dd>${er(v??'—')}</dd>`;
-      }).join('')}</dl>`:'<div class="empty">Aucun FieldDefinition pour ce type.</div>'}
-    </div>`;
+    ${body}`;
 
-    $('#v112BackList').onclick=()=>{ns.inventoryView[type]='list';ns.inventorySelected[type]=null;renderInventory(type);};
-    $('#v112SuggestSlot').onclick=()=>suggestPositionForItem(type,data,item);
+    $('#v112BackList').onclick=()=>{ns.inventoryView[type]='list';ns.inventorySelected[type]=null;ns.inventoryDetailTab[type]='overview';renderInventory(type);};
+    document.querySelectorAll('[data-v112-detail-tab]').forEach(t=>t.onclick=()=>{ns.inventoryDetailTab[type]=t.dataset.v112DetailTab;renderInventory(type);});
+    $('#v112SuggestSlot')?.addEventListener('click',()=>suggestPositionForItem(type,data,item));
     $('#v112AddUnitFromItem')?.addEventListener('click',()=>addUnitFromItem(type,data,item));
+    document.querySelectorAll('[data-v112-locate]').forEach(b=>b.onclick=()=>{
+      const u=data.units.find(x=>x.code===b.dataset.v112Locate);
+      const pos=data.positions.find(x=>x.unitCode===u?.code);
+      if(!pos)return;
+      ns.inventoryView[type]='storage';
+      const st=storageState(type);st.containerCode=pos.containerCode;st.slot=pos.slot;st.view='2d';
+      renderInventory(type);
+    });
+    $('#v112AddDocument')?.addEventListener('click',()=>showAddInventoryDocument(type,item));
+    $('#v112AddNote')?.addEventListener('click',()=>showAddInventoryNote(type,item));
+  }
+
+  function showAddInventoryDocument(type,item){
+    modal(`<h2>Ajouter un document</h2>
+      <div class="field"><label>Titre</label><input id="v112DocTitle"></div>
+      <div class="form-grid" style="margin-top:12px">
+        <div class="field"><label>Type</label><input id="v112DocType" placeholder="Datasheet, publication, protocole…"></div>
+        <div class="field"><label>Lien</label><input id="v112DocLink" type="url"></div>
+      </div>
+      <div class="field" style="margin-top:12px"><label>Notes</label><textarea id="v112DocNotes"></textarea></div>
+      <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn" id="v112DocCancel">Annuler</button><button class="btn btn-primary" id="v112DocSave">Ajouter</button></div>`);
+    $('#v112DocCancel').onclick=closeModal;
+    $('#v112DocSave').onclick=async()=>{
+      const title=$('#v112DocTitle').value.trim();if(!title)return toast('Titre requis.');
+      try{
+        await grist.docApi.applyUserActions([['AddRecord','InventoryDocuments',null,{Item:Number(item.id),InventoryType:type,Title:title,Type:$('#v112DocType').value.trim(),Link:$('#v112DocLink').value.trim(),Notes:$('#v112DocNotes').value.trim()}]]);
+        closeModal();await loadAll();toast('Document ajouté.');renderInventory(type);
+      }catch(err){console.error(err);toast(`Erreur : ${err.message||err}`);}
+    };
+  }
+
+  function showAddInventoryNote(type,item){
+    modal(`<h2>Ajouter une note</h2>
+      <div class="field"><label>Auteur</label><input id="v112NoteAuthor" value="Laboratoire"></div>
+      <div class="field" style="margin-top:12px"><label>Note</label><textarea id="v112NoteText"></textarea></div>
+      <div class="field" style="margin-top:12px"><label>Lien / pièce jointe</label><input id="v112NoteLink" type="url"></div>
+      <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn" id="v112NoteCancel">Annuler</button><button class="btn btn-primary" id="v112NoteSave">Ajouter</button></div>`);
+    $('#v112NoteCancel').onclick=closeModal;
+    $('#v112NoteSave').onclick=async()=>{
+      const text=$('#v112NoteText').value.trim();if(!text)return toast('Note vide.');
+      try{
+        await grist.docApi.applyUserActions([['AddRecord','InventoryNotes',null,{Item:Number(item.id),InventoryType:type,Date:Date.now()/1000,Author:$('#v112NoteAuthor').value.trim(),Text:text,AttachmentLink:$('#v112NoteLink').value.trim()}]]);
+        closeModal();await loadAll();toast('Note ajoutée.');renderInventory(type);
+      }catch(err){console.error(err);toast(`Erreur : ${err.message||err}`);}
+    };
   }
 
   function unitLocation(data,u){
@@ -396,15 +584,19 @@
       const item=unit?.item||items.get(unit?.itemCode)||unit?.candidateItem||items.get(unit?.candidateItemCode)||null;
       const detectedHost=unit?.detectedHost||item?.hostSpecies||'';
       const host=core.hostKey(detectedHost);
+      const color=data.type===MANIFEST_TYPE?secondaryColor(item,unit):(palette[host]?.color||palette.unknown?.color||'#d4dce3');
       slots.set(parts.slot,{
         ...p,...parts,Slot:parts.slot,Vial:unit?.code||'',occupied:!!unit,vial:unit,antibody:item,
-        host,color:palette[host]||palette.unknown,label:item?.name||unit?.cleanLabel||unit?.rawLabel||unit?.code||(unit?'Vial non relié':'Libre'),
+        host,color,label:item?.name||unit?.cleanLabel||unit?.rawLabel||unit?.code||(unit?'Vial non relié':'Libre'),
         source:unit?.rawLabel||'',blocked:!unit && p.available===false
       });
     }
     return {
-      ...container,id:container.id,Name:container.name,Temperature:Number.isFinite(container.temperatureNumeric)?container.temperatureNumeric:Number(String(container.temperature||'').match(/-?\d+/)?.[0]||0),
-      DisplayTemperature:container.temperature,Rows:container.rows,Columns:container.columns,slots,
+      ...container,id:container.id,Name:container.name,
+      Temperature:Number.isFinite(container.temperatureNumeric)?container.temperatureNumeric:Number(String(container.temperature||'').match(/-?\d+/)?.[0]||0),
+      DisplayTemperature:container.temperature,Rows:container.rows,Columns:container.columns,
+      GridOrientation:container.gridOrientation||defaultContainerOrientation(container.code,container.notes||''),
+      Subtitle:container.subtitle||'',slots,
       occupied:[...slots.values()].filter(x=>x.occupied).length,capacity:container.rows*container.columns
     };
   }
@@ -430,45 +622,82 @@
     if(!container){ container=data.containers[0]; st.containerCode=container.code; st.slot=null; }
     const box=buildBox(data,container);
     const can3d=Number(container.rows)===10&&Number(container.columns)===10;
+    const unitLabel=cfg.UnitLabel||'unité';
+    const located=data.positions.filter(p=>p.unitCode).length;
+    const totalCapacity=data.containers.reduce((n,c)=>n+Number(c.rows||10)*Number(c.columns||10),0);
 
-    content.innerHTML=`<h1 class="page-title">Stockage — ${er(cfg.Name||type)}</h1>
-      <p class="subtitle">${data.mode==='manifest'?'Aperçu des vraies boîtes Excel. Les actions d’écriture sont désactivées jusqu’à l’import Grist.':'Stockage générique v11.2 connecté à Grist.'}</p>
+    content.innerHTML=`
+      <div class="v112-storage-hero">
+        <div>
+          <div class="v112-storage-kicker">STOCKAGE DU LABORATOIRE</div>
+          <h1 class="page-title">Chaque ${er(unitLabel.toLowerCase())} à sa place.</h1>
+          <p class="subtitle">Explore les boîtes de ${er(cfg.Name||type).toLowerCase()}, retrouve une référence et organise son emplacement.</p>
+        </div>
+        <div class="v112-storage-total"><strong>${located}</strong><span>${er(unitLabel.toLowerCase())}${located>1?'s':''} localisé${located>1?'s':''}<br>dans les boîtes</span></div>
+      </div>
       ${importBanner(type,data)}
-      <div class="v112-storage-layout">
-        <aside class="v112-boxes">
-          <div class="card card-pad"><h3 class="section-title">Boîtes</h3>
-            ${data.containers.map(c=>{
-              const b=buildBox(data,c);
-              return `<button class="v112-box ${c.code===container.code?'active':''}" data-v112-box="${er(c.code)}">
-                <span><b>${er(c.name)}</b><small>${er(c.temperature)} · ${b.occupied}/${b.capacity}</small></span><span>›</span>
-              </button>`;
-            }).join('')}
+      <div class="v112-storage-box-row">
+        ${data.containers.map(c=>{
+          const b=buildBox(data,c),pct=b.capacity?Math.round(b.occupied/b.capacity*100):0;
+          return `<button class="v112-storage-box-card ${c.code===container.code?'active':''}" data-v112-box="${er(c.code)}">
+            <span class="v112-storage-box-icon">▦</span>
+            <span class="v112-storage-box-body">
+              <strong>${er(c.name)}</strong>
+              <small>${b.occupied} / ${b.capacity} positions occupées · ${er(c.temperature||'Température non renseignée')}</small>
+              ${b.Subtitle?`<em>${er(b.Subtitle)}</em>`:''}
+              <span class="v112-progress"><i style="width:${pct}%"></i></span>
+            </span>
+            <span class="v112-chevron">›</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <section class="card v112-storage-main v112-storage-primarylike">
+        <div class="v112-storage-toolbar">
+          <div>
+            <h2>${er(container.name)}</h2>
+            <p>${er(container.temperature)} · ${box.occupied}/${box.capacity} positions occupées${box.Subtitle?` · ${er(box.Subtitle)}`:''}</p>
           </div>
-        </aside>
-        <section class="card v112-storage-main">
-          <div class="v112-storage-toolbar">
-            <div><h2>${er(container.name)}</h2><p>${er(container.temperature)} · ${box.occupied}/${box.capacity} positions occupées</p></div>
-            <div class="row"><button class="btn ${st.view==='3d'?'btn-primary':''}" data-v112-storage-view="3d" ${can3d?'':'disabled'}>3D</button>
-            <button class="btn ${st.view==='2d'?'btn-primary':''}" data-v112-storage-view="2d">2D</button></div>
+          <div class="row v112-storage-actions">
+            <button class="btn" id="v112ToggleOpen" ${st.view==='3d'&&can3d?'':'disabled'}>${st.opened===false?'Ouvrir la boîte':'Fermer la boîte'}</button>
+            <button class="btn ${st.view==='3d'?'btn-primary':''}" data-v112-storage-view="3d" ${can3d?'':'disabled'}>Vue 3D</button>
+            <button class="btn ${st.view==='2d'?'btn-primary':''}" data-v112-storage-view="2d">Vue 2D</button>
           </div>
-          <div class="v112-workbench">
-            <div class="v112-view-host">
-              <div id="v112Scene" class="${st.view==='3d'?'':'hidden'}"></div>
-              <div id="v112Grid" class="${st.view==='2d'?'':'hidden'}"></div>
-              <div id="v112Hover" class="v112-hover">${er(st.hover||'')}</div>
-            </div>
-            <aside id="v112UnitPanel" class="v112-unit-panel"></aside>
+        </div>
+        <div class="v112-workbench">
+          <div class="v112-view-host">
+            <div id="v112Scene" class="${st.view==='3d'?'':'hidden'}"></div>
+            <div id="v112Grid" class="${st.view==='2d'?'':'hidden'}"></div>
+            <div id="v112Hover" class="v112-hover">${er(st.hover||'')}</div>
           </div>
-        </section>
-      </div>`;
+          <aside id="v112UnitPanel" class="v112-unit-panel"></aside>
+        </div>
+        <div class="v112-storage-footer">
+          <div class="v112-storage-legend">${storageLegend(data,box)}</div>
+          <div class="row">
+            <button class="btn btn-sm" id="v112Recenter" ${st.view==='3d'&&can3d?'':'disabled'}>↗ Recentrer</button>
+            <button class="btn btn-sm" id="v112Perspective" ${st.view==='3d'&&can3d?'':'disabled'}>Perspective</button>
+            <button class="btn btn-sm" id="v112TopView" ${st.view==='3d'&&can3d?'':'disabled'}>Vue du dessus</button>
+          </div>
+        </div>
+      </section>
+      <p class="v112-storage-footnote">${located} ${er(unitLabel.toLowerCase())}${located>1?'s':''} positionné${located>1?'s':''} sur ${totalCapacity} emplacements disponibles dans cet inventaire.</p>`;
 
     $('#v112ImportSecondary')?.addEventListener('click',showSecondaryImport);
     document.querySelectorAll('[data-v112-box]').forEach(b=>b.onclick=()=>{
-      st.containerCode=b.dataset.v112Box;st.slot=null;renderGenericStorage(type,data,cfg);
+      st.containerCode=b.dataset.v112Box;st.slot=null;st.opened=true;renderGenericStorage(type,data,cfg);
     });
     document.querySelectorAll('[data-v112-storage-view]').forEach(b=>b.onclick=()=>{
       st.view=b.dataset.v112StorageView;renderGenericStorage(type,data,cfg);
     });
+    $('#v112ToggleOpen')?.addEventListener('click',()=>{
+      st.opened=st.opened===false?true:false;
+      ns.genericScene?.setOpen?.(st.opened);
+      const btn=$('#v112ToggleOpen');if(btn)btn.textContent=st.opened?'Fermer la boîte':'Ouvrir la boîte';
+    });
+    $('#v112Recenter')?.addEventListener('click',()=>ns.genericScene?.fit?.());
+    $('#v112Perspective')?.addEventListener('click',()=>ns.genericScene?.fit?.('perspective'));
+    $('#v112TopView')?.addEventListener('click',()=>ns.genericScene?.fit?.('top'));
+
     renderGenericGrid(type,data,box);
     renderUnitPanel(type,data,box);
     if(st.view==='3d'&&can3d) void mountGenericScene(type,data,box);
@@ -477,21 +706,43 @@
   function renderGenericGrid(type,data,box){
     const host=$('#v112Grid'); if(!host) return;
     const st=storageState(type);
-    let html=`<div class="v112-slot-grid" style="grid-template-columns:34px repeat(${box.Columns},minmax(44px,1fr))"><span></span>`;
-    for(let c=1;c<=box.Columns;c++) html+=`<span class="coordinate">${c}</span>`;
-    for(let r=0;r<box.Rows;r++){
-      html+=`<span class="coordinate">${String.fromCharCode(65+r)}</span>`;
-      for(let c=0;c<box.Columns;c++){
-        const slot=String.fromCharCode(65+r)+(c+1);
-        const p=box.slots.get(slot);
-        html+=`<button data-v112-slot="${slot}" class="${slot===st.slot?'selected ':''}${p?.occupied?'occupied ':''}${!p?'missing':''}"
-          ${!p?'disabled':''} style="${p?.occupied?`--slot-color:${p.color}`:''}" title="${er(p?.label||'Position absente')}">
-          <b>${slot}</b><small>${er(p?.occupied?p.label:p?.blocked?'Indisponible':p?'Libre':'Absente')}</small>
-        </button>`;
+    const horizontalLetters=box.GridOrientation==='letters-columns';
+    let html='';
+    if(horizontalLetters){
+      html=`<div class="v112-slot-grid v112-slot-grid-excel" style="grid-template-columns:34px repeat(${box.Rows},minmax(58px,1fr))"><span></span>`;
+      for(let c=0;c<box.Rows;c++) html+=`<span class="coordinate">${String.fromCharCode(65+c)}</span>`;
+      for(let r=1;r<=box.Columns;r++){
+        html+=`<span class="coordinate">${r}</span>`;
+        for(let c=0;c<box.Rows;c++){
+          const slot=String.fromCharCode(65+c)+r;
+          const p=box.slots.get(slot);
+          html+=storageSlotButton(slot,p,st);
+        }
+      }
+    }else{
+      html=`<div class="v112-slot-grid" style="grid-template-columns:34px repeat(${box.Columns},minmax(58px,1fr))"><span></span>`;
+      for(let c=1;c<=box.Columns;c++) html+=`<span class="coordinate">${c}</span>`;
+      for(let r=0;r<box.Rows;r++){
+        html+=`<span class="coordinate">${String.fromCharCode(65+r)}</span>`;
+        for(let c=0;c<box.Columns;c++){
+          const slot=String.fromCharCode(65+r)+(c+1);
+          const p=box.slots.get(slot);
+          html+=storageSlotButton(slot,p,st);
+        }
       }
     }
     host.innerHTML=html+'</div>';
     host.querySelectorAll('[data-v112-slot]').forEach(b=>b.onclick=()=>selectStorageSlot(type,data,box,b.dataset.v112Slot));
+  }
+
+  function storageSlotButton(slot,p,st){
+    const item=p?.antibody,u=p?.vial;
+    const short=item?.fluorophore||u?.detectedFluorophore||'';
+    const label=p?.occupied?(u?.rawLabel||p.label):p?.blocked?'Indisponible':p?'Libre':'Absente';
+    return `<button data-v112-slot="${er(slot)}" class="${slot===st.slot?'selected ':''}${p?.occupied?'occupied ':''}${!p?'missing':''}"
+      ${!p?'disabled':''} style="${p?.occupied?`--slot-color:${p.color}`:''}" title="${er(label)}">
+      <b>${er(slot)}</b>${short?`<span class="v112-slot-fluor">${er(short)}</span>`:''}<small>${er(label)}</small>
+    </button>`;
   }
 
   function selectStorageSlot(type,data,box,slot){
@@ -504,11 +755,20 @@
     const el=$('#v112Scene'); if(!el) return;
     try{
       const mod=await sceneModule();
-      ns.genericScene=mod.mountScene(el,box,
+      const adapted=sceneBoxForOrientation(box);
+      const scene=mod.mountScene(el,adapted.sceneBox,
         slot=>selectStorageSlot(type,data,box,slot),
         text=>{const st=storageState(type);st.hover=text;const h=$('#v112Hover');if(h)h.textContent=text;}
       );
+      ns.genericScene={
+        ...scene,
+        select(rawSlot){ scene.select(adapted.rawToScene.get(rawSlot)||rawSlot); },
+        fit(view){ scene.fit(view); },
+        setOpen(value){ scene.setOpen(value); },
+        dispose(){ scene.dispose(); }
+      };
       const st=storageState(type);
+      ns.genericScene.setOpen(st.opened!==false);
       if(st.slot) ns.genericScene.select(st.slot);
     }catch(err){
       console.error(err);
@@ -520,12 +780,16 @@
     const panel=$('#v112UnitPanel');if(!panel)return;
     const st=storageState(type),p=box.slots.get(st.slot);
     if(!p){
-      panel.innerHTML='<p class="v112-eyebrow">FICHE DU FLACON</p><div class="empty">Sélectionne une position dans la boîte.</div>';
+      panel.innerHTML='<p class="v112-eyebrow">FICHE DU FLACON</p><div class="v112-panel-empty"><span>⌖</span><h2>Sélectionne un flacon</h2><p>Clique sur la boîte ou sur le plan pour consulter son contenu.</p></div>';
       return;
     }
     if(!p.occupied){
       panel.innerHTML=`<p class="v112-eyebrow">EMPLACEMENT ${er(p.Slot)}</p><h2>${p.blocked?'Position indisponible':'Position libre'}</h2>
         <p class="subtitle">${er(box.Name)} · ${er(box.DisplayTemperature)}</p>
+        <dl class="detail-list v112-panel-list">
+          <dt>Position</dt><dd>${er(p.Slot)}</dd><dt>Boîte</dt><dd>${er(box.Name)}</dd>
+          <dt>Température</dt><dd>${er(box.DisplayTemperature||'—')}</dd><dt>Rack</dt><dd>${er(box.rack||'Sans rack')}</dd>
+        </dl>
         ${data.mode==='grist'&&!p.blocked?'<button class="btn btn-primary" id="v112AddHere">+ Ajouter un vial ici</button>':'<div class="banner">Mode aperçu : aucune écriture.</div>'}`;
       $('#v112AddHere')?.addEventListener('click',()=>showAddGenericUnit(type,data,box,p));
       return;
@@ -533,26 +797,47 @@
     const u=p.vial,item=p.antibody;
     const matchLabel=u.matchStatus==='auto'||u.matchStatus==='validated'?'Correspondance validée':u.matchStatus==='review'?'À valider':u.matchStatus==='other_reagent'?'Autre réactif':'Non résolu';
     const matchClass=u.matchStatus==='auto'||u.matchStatus==='validated'?'ok':u.matchStatus==='review'?'warn':'neutral';
+    const labWB=item?.attributes?.labWB||'';
+    const labIF=item?.attributes?.labImmunostaining||'';
     panel.innerHTML=`<p class="v112-eyebrow">FICHE DU FLACON · ${er(p.Slot)}</p>
       <div class="v112-vial-dot" style="--vial-color:${p.color}"></div>
       <h2>${er(item?.name||u.cleanLabel||u.rawLabel||u.code)}</h2>
       <p class="subtitle">${er(u.code)}</p>
-      <p><span class="pill ${matchClass}">${er(matchLabel)}</span></p>
+      <p><span class="pill ${matchClass}">${er(matchLabel)}</span> ${u.fillStatus?`<span class="pill neutral">${er(u.fillStatus)}</span>`:''}</p>
       <dl class="detail-list v112-panel-list">
         <dt>Libellé boîte</dt><dd>${er(u.rawLabel||'—')}</dd>
         <dt>Cible</dt><dd>${er(item?.targetSpecies||u.detectedTargetSpecies||'—')}</dd>
         <dt>Fluorophore</dt><dd>${er(item?.fluorophore||u.detectedFluorophore||'—')}</dd>
+        <dt>Ex / Em</dt><dd>${er(item?.excitation_nm??'—')} / ${er(item?.emission_nm??'—')} nm</dd>
         <dt>Hôte</dt><dd>${er(item?.hostSpecies||u.detectedHost||'—')}</dd>
+        <dt>Classe</dt><dd>${er(item?.class||'—')}</dd>
         <dt>Référence</dt><dd>${er(item?.catalogNumber||'—')}</dd>
         <dt>Fournisseur</dt><dd>${er(item?.supplier||'—')}</dd>
+        <dt>Remplissage</dt><dd>${er(u.fillStatus||'Inconnu')}</dd>
+        <dt>Volume</dt><dd>${u.estimatedVolume_uL===null||u.estimatedVolume_uL===undefined?'Non renseigné':`${er(u.estimatedVolume_uL)} µL`}</dd>
         <dt>Statut</dt><dd>${er(u.status||'—')}</dd>
+        <dt>Date / lot</dt><dd>${er(u.dateLabel||u.dateReceived||'—')}</dd>
         <dt>Position</dt><dd>${er(p.Slot)}</dd>
+        <dt>Boîte</dt><dd>${er(box.Name)}</dd>
+        <dt>Température</dt><dd>${er(box.DisplayTemperature||'—')}</dd>
+        <dt>Rack</dt><dd>${er(box.rack||'Sans rack')}</dd>
+        <dt>Validation WB</dt><dd>${er(labWB||'—')}</dd>
+        <dt>Validation IF/IHC</dt><dd>${er(labIF||'—')}</dd>
+        <dt>Score rapprochement</dt><dd>${u.matchScore===null||u.matchScore===undefined?'—':er(u.matchScore)}</dd>
       </dl>
       ${u.candidateItem&&!u.item?`<div class="banner"><b>Candidat :</b> ${er(u.candidateItem.name)} · ${er(u.candidateItem.catalogNumber||'sans référence')}<br>${er((u.matchIssues||[]).join(' · '))}</div>`:''}
-      ${data.mode==='grist'?`<div class="v112-panel-actions">
-        <button class="btn" id="v112EditUnit">Modifier</button><button class="btn" id="v112MoveUnit">Déplacer</button>
-        ${/vide/i.test(u.status||u.fillStatus||'')?'<button class="btn btn-danger" id="v112RemoveUnit">Confirmer retrait physique</button>':'<button class="btn btn-danger" id="v112EmptyUnit">Marquer vide</button>'}
-      </div>`:''}`;
+      <div class="v112-panel-actions">
+        ${item?`<button class="btn btn-primary" id="v112OpenItem">Voir la fiche ${er((typeConfig(type)?.SingularName||'élément').toLowerCase())}</button>`:''}
+        ${item?.website?`<a class="btn" href="${er(item.website)}" target="_blank" rel="noopener noreferrer">Fiche fournisseur ↗</a>`:''}
+        ${data.mode==='grist'?`
+          <button class="btn" id="v112EditUnit">Modifier le vial</button><button class="btn" id="v112MoveUnit">Déplacer le flacon</button>
+          ${/vide/i.test(u.status||u.fillStatus||'')?'<button class="btn btn-danger" id="v112RemoveUnit">Confirmer le retrait physique</button>':'<button class="btn btn-danger" id="v112EmptyUnit">Marquer comme vide</button>'}
+        `:''}
+      </div>
+      <p class="v112-panel-note">${data.mode==='grist'?'Les modifications sont enregistrées dans Grist et InventoryHistory.':'Aperçu Excel : aucune modification n’est écrite dans Grist.'}</p>`;
+    $('#v112OpenItem')?.addEventListener('click',()=>{
+      ns.inventorySelected[type]=item.id;ns.inventoryView[type]='detail';renderInventory(type);
+    });
     $('#v112EditUnit')?.addEventListener('click',()=>showEditGenericUnit(type,data,box,p));
     $('#v112MoveUnit')?.addEventListener('click',()=>showMoveGenericUnit(type,data,box,p));
     $('#v112EmptyUnit')?.addEventListener('click',()=>markGenericEmpty(type,p));
@@ -732,6 +1017,11 @@
     const required=['InventoryItems','InventoryAttributes','InventoryContainers','InventoryUnits','InventoryPositions','InventoryHistory'];
     const missing=required.filter(x=>!state.tables.includes(x));
     if(missing.length)throw Error(`Initialise d’abord la structure v11.2 : ${missing.join(', ')}.`);
+    const storageFields=['GridOrientation','StorageProfile','DisplayStyle','Subtitle'];
+    const unitFields=['DetectedHost','DetectedTargetSpecies','DetectedFluorophore','StockMarker','DateLabel'];
+    if(!tableHasFields('InventoryContainers',storageFields)||!tableHasFields('InventoryUnits',unitFields)){
+      throw Error('La structure v11.2 doit être complétée avant cet import. Va dans Administration > Vérifier la structure v11.2.');
+    }
     const m=manifest();if(!m)throw Error('Manifeste secondaire introuvable.');
 
     await bulkAddMissing('InventoryItems',m.items.map(i=>({
@@ -763,7 +1053,9 @@
 
     await bulkAddMissing('InventoryContainers',m.containers.map(c=>({
       Code:c.code,InventoryType:'secondary_antibody',Name:c.name,Temperature:c.temperature,Rack:'',Rows:c.rows,Columns:c.columns,
-      Notes:`Source : ${c.sourceSheet} / ${c.sourceRegion}`,Active:true
+      GridOrientation:c.gridOrientation||defaultContainerOrientation(c.code,''),StorageProfile:'secondary_antibody',
+      DisplayStyle:'box-grid',Subtitle:c.subtitle||'',
+      Notes:`Source : ${c.sourceSheet} / ${c.sourceRegion} | Layout:${c.gridOrientation||defaultContainerOrientation(c.code,'')} | Subtitle:${c.subtitle||''}`,Active:true
     })));
     const boxes=trows('InventoryContainers').filter(x=>x.InventoryType==='secondary_antibody');
     const boxByCode=new Map(boxes.map(x=>[x.Code,x]));
@@ -773,6 +1065,8 @@
       Item:u.itemCode?Number(itemByCode.get(u.itemCode)?.id||0):0,
       FillStatus:'Inconnu',EstimatedVolume_uL:null,Status:u.status,Comments:(u.matchIssues||[]).join(' · '),
       RawLabel:u.rawLabel,MatchStatus:u.matchStatus,MatchScore:u.matchScore??null,CandidateItemCode:u.candidateItemCode||'',
+      DetectedHost:u.detectedHost||'',DetectedTargetSpecies:u.detectedTargetSpecies||'',DetectedFluorophore:u.detectedFluorophore||'',
+      StockMarker:u.stockMarker===true,DateLabel:u.dateLabel||'',
       RawTable:u.sourceSheet,RawCell:`${u.containerCode}/${u.slot}`
     })));
     const units=trows('InventoryUnits').filter(x=>x.InventoryType==='secondary_antibody');
