@@ -1,4 +1,4 @@
-/* BioDynaMit v11.2.4 — inventory-centric navigation and UI consistency.
+/* BioDynaMit v11.2.4c — inventory-centric navigation and UI consistency.
    Final layer loaded after the v11.2 inventory/config modules.
    No migration of primary laboratory data is performed.
 */
@@ -6,7 +6,7 @@
   'use strict';
 
   const ns=window.BioDynaMitV112=window.BioDynaMitV112||{};
-  ns.uiVersion='11.2.4';
+  ns.uiVersion='11.2.4c';
 
   const labelForType=t=>{
     if(!t)return '';
@@ -35,9 +35,6 @@
       .sort((a,b)=>Number(a.SortOrder||999)-Number(b.SortOrder||999));
   }
 
-  // Single navigation concept:
-  // Home -> enabled inventory families -> Alerts/Documents/Journal.
-  // Vials and Storage remain internal legacy routes, no longer separate sidebar families.
   renderNav=function(){
     const items=[['dashboard','⌂','Accueil']];
     for(const t of visibleInventoryTypes()){
@@ -57,9 +54,6 @@
       go(r);
     });
 
-    // Administration lives outside #nav in the HTML shell.
-    // Rebind it every time renderNav() runs so the v11.2.3 override
-    // does not disable the button.
     const adminBtn=document.querySelector('.sidebar-bottom [data-route="admin"]');
     if(adminBtn){
       adminBtn.onclick=()=>go('admin');
@@ -116,7 +110,6 @@
   if(typeof storage==='function')storage=wrapPrimaryStorage(storage);
   if(typeof box3d==='function')box3d=wrapPrimaryStorage(box3d);
 
-  // Text consistency in legacy primary views kept for backwards compatibility.
   const baseVials=typeof vials==='function'?vials:null;
   if(baseVials){
     vials=function(){
@@ -128,25 +121,37 @@
     };
   }
 
+  // IMPORTANT v11.2.4c:
+  // Every DOM write is guarded. Writing the same textContent repeatedly from a
+  // MutationObserver can generate its own mutation and lock the embedded widget.
+  let normalizing=false;
   function normalizeLabels(){
-    document.querySelectorAll('.storage-integrated-v11 [data-sv11-antibody]').forEach(b=>b.textContent='Voir la fiche anticorps primaire');
-    if(state?.route==='dashboard'){
-      document.querySelectorAll('#content .metric span').forEach(s=>{
-        if(s.textContent.trim()==='Anticorps')s.textContent='Anticorps primaires';
+    if(normalizing)return;
+    normalizing=true;
+    try{
+      document.querySelectorAll('.storage-integrated-v11 [data-sv11-antibody]').forEach(b=>{
+        if(b.textContent.trim()!=='Voir la fiche anticorps primaire'){
+          b.textContent='Voir la fiche anticorps primaire';
+        }
       });
+      if(state?.route==='dashboard'){
+        document.querySelectorAll('#content .metric span').forEach(s=>{
+          if(s.textContent.trim()==='Anticorps')s.textContent='Anticorps primaires';
+        });
+      }
+      document.querySelectorAll('#content h1,#content h2,#content h3').forEach(x=>{
+        if(x.textContent.trim()==='Anticorps')x.textContent='Anticorps primaires';
+      });
+    }finally{
+      normalizing=false;
     }
-    document.querySelectorAll('#content h1,#content h2,#content h3').forEach(x=>{
-      if(x.textContent.trim()==='Anticorps')x.textContent='Anticorps primaires';
-    });
   }
 
-  const observer=new MutationObserver(normalizeLabels);
+  const observer=new MutationObserver(()=>normalizeLabels());
   observer.observe(document.body,{childList:true,subtree:true});
   normalizeLabels();
 
-  // If a generic inventory has real data, make it visible without requiring a
-  // developer to edit the sidebar. Config can still explicitly enable/disable it.
   ns.refreshInventoryNavigation=()=>renderNav();
 
-  try{renderNav();}catch(err){console.warn('v11.2.4 navigation:',err);}
+  try{renderNav();}catch(err){console.warn('v11.2.4c navigation:',err);}
 })();
