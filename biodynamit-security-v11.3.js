@@ -16,7 +16,7 @@
 
   const ns=window.BioDynaMitV113=window.BioDynaMitV113||{};
   const v112=window.BioDynaMitV112=window.BioDynaMitV112||{};
-  const VERSION='11.3.0';
+  const VERSION='11.3.1';
 
   const SECURITY_SCHEMAS={
     SecurityAdminGate:[
@@ -331,7 +331,7 @@
           BeforeJSON:truncate(snap.before),
           AfterJSON:truncate(snap.after),
           Details:truncate(success?snap.details:`ÉCHEC — ${errorText||snap.details}`,4000),
-          Source:'BioDynaMit v11.3',
+          Source:'BioDynaMit v11.3.1',
           Success:!!success,
           SessionId:ns.sessionId
         }]);
@@ -347,7 +347,7 @@
           Summary:truncate(snap.details,1500),
           EntityType:snap.table,
           EntityCode:entCode,
-          Source:'BioDynaMit v11.3',
+          Source:'BioDynaMit v11.3.1',
           SessionId:ns.sessionId
         }]);
       }
@@ -414,25 +414,36 @@
 
     const adminBtn=document.querySelector('.sidebar-bottom [data-route="admin"]');
     if(adminBtn){
-      adminBtn.style.display=(enabled&&!isAdmin)?'none':'';
-      adminBtn.setAttribute('aria-hidden',(enabled&&!isAdmin)?'true':'false');
+      const display=(enabled&&!isAdmin)?'none':'';
+      const aria=(enabled&&!isAdmin)?'true':'false';
+      if(adminBtn.style.display!==display) adminBtn.style.display=display;
+      if(adminBtn.getAttribute('aria-hidden')!==aria) adminBtn.setAttribute('aria-hidden',aria);
     }
 
     const profile=document.querySelector('.sidebar-bottom .profile');
     if(profile){
       const strong=profile.querySelector('strong');
       const small=profile.querySelector('small');
-      if(strong) strong.textContent=core.roleLabel(ns.role);
-      if(small) small.textContent=enabled?'Sécurité v11.3 active':'Sécurité v11.3 à configurer';
-      profile.classList.remove('v113-role-admin','v113-role-editor','v113-role-viewer','v113-role-unconfigured');
-      profile.classList.add(roleClass());
+      const roleText=core.roleLabel(ns.role);
+      const securityText=enabled?'Sécurité v11.3 active':'Sécurité v11.3 à configurer';
+
+      // Important: MutationObserver watches childList. Rewriting textContent with
+      // the same value creates a new mutation and can lock the whole widget.
+      if(strong && strong.textContent!==roleText) strong.textContent=roleText;
+      if(small && small.textContent!==securityText) small.textContent=securityText;
+
+      const targetClass=roleClass();
+      for(const cl of ['v113-role-admin','v113-role-editor','v113-role-viewer','v113-role-unconfigured']){
+        if(cl!==targetClass && profile.classList.contains(cl)) profile.classList.remove(cl);
+      }
+      if(!profile.classList.contains(targetClass)) profile.classList.add(targetClass);
     }
 
     // UI convenience only; the true protection is Grist Access Rules + the write guard.
     document.querySelectorAll('button,a').forEach(el=>{
       const txt=String(el.textContent||'').trim().toLowerCase();
       if(enabled && ns.role!==core.ROLES.ADMIN && /^(supprimer|delete|supprimer définitivement)/i.test(txt)){
-        el.style.display='none';
+        if(el.style.display!=='none') el.style.display='none';
       }
     });
   }
@@ -808,16 +819,22 @@
 
   function installUiObserver(){
     if(ns._uiObserver) return;
-    let busy=false;
+
+    // Coalesce DOM bursts into a single pass. Combined with idempotent DOM writes
+    // in applyRoleUI(), this prevents the observer from triggering itself forever.
+    let scheduled=false;
     ns._uiObserver=new MutationObserver(()=>{
-      if(busy) return;
-      busy=true;
-      try{
-        applyRoleUI();
-        injectActivityCard();
-      }finally{
-        busy=false;
-      }
+      if(scheduled) return;
+      scheduled=true;
+      requestAnimationFrame(()=>{
+        scheduled=false;
+        try{
+          applyRoleUI();
+          injectActivityCard();
+        }catch(err){
+          console.warn('BioDynaMit v11.3.1 UI observer:',err);
+        }
+      });
     });
     ns._uiObserver.observe(document.body,{childList:true,subtree:true});
   }
