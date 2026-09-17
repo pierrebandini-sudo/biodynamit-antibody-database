@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>BioDynaMit — test réseau PubMed</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#f5f7fa;color:#14213d;padding:24px}
+.card{max-width:760px;margin:auto;background:white;border:1px solid #d9e1ec;border-radius:14px;padding:20px}
+.ok{color:#137333}.err{color:#b42318}pre{white-space:pre-wrap;background:#f6f8fb;padding:12px;border-radius:8px}
+</style>
+</head>
+<body><div class="card">
+<h2>Test réseau BioDynaMit → PubMed/NCBI</h2>
+<p id="status">Test en cours…</p><pre id="out"></pre>
+</div>
+<script>
+(async()=>{
+ const s=document.getElementById('status'),o=document.getElementById('out');
+ try{
+   const u='https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=1&tool=BioDynaMit&term=mitochondria';
+   const r=await fetch(u,{mode:'cors',credentials:'omit',cache:'no-store'});
+   const j=await r.json();
+   if(!r.ok) throw new Error('HTTP '+r.status);
+   s.className='ok';s.textContent='✓ Connexion PubMed/NCBI fonctionnelle.';
+   o.textContent='PMID test : '+(j?.esearchresult?.idlist?.[0]||'aucun')+'\nRésultats : '+(j?.esearchresult?.count||'?');
+ }catch(e){
+   s.className='err';s.textContent='✗ Connexion bloquée.';
+   o.textContent=e?.stack||e?.message||String(e);
+ }
+})();
+</script></body></html>
