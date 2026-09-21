@@ -260,7 +260,9 @@
     const btn=e.target.closest?.('[data-sv11-add]');
     if(!btn) return;
     e.preventDefault(); e.stopImmediatePropagation();
-    showImprovedAddVial();
+    const enhanced=window.BioDynaMitV117?.showAddAtSelectedPosition;
+    if(typeof enhanced==='function') enhanced();
+    else showImprovedAddVial();
   },true);
 
   window.BioDynaMitV111 = {effectiveTarget, showImprovedAddVial, version:'11.1'};
