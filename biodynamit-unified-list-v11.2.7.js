@@ -83,27 +83,54 @@
     );
   }
 
+  function primaryRefKey(v){return norm(v).replace(/\s+/g,'');}
+
   function primaryDupMap(items){
     const map=new Map();
     for(const a of items){
-      const ref=norm(a.CatalogNumber);
+      const ref=primaryRefKey(a.CatalogNumber);
       if(!ref)continue;
       const key=`${norm(a.Supplier)}|${ref}`;
-      map.set(key,(map.get(key)||0)+1);
+      if(!map.has(key))map.set(key,[]);
+      map.get(key).push(a);
     }
     return map;
   }
 
+  function primaryCompleteness(a){
+    return ['Name','FullName','Supplier','CatalogNumber','HostSpecies','Target','ApplicationsText','Website']
+      .reduce((n,k)=>n+(String(a[k]||'').trim()?1:0),0);
+  }
+
+  function primaryCanonical(group,data){
+    return group.slice().sort((a,b)=>{
+      const av=primaryUnitsFor(a,data).length,bv=primaryUnitsFor(b,data).length;
+      return Number(b.Active!==false)-Number(a.Active!==false) || bv-av || primaryCompleteness(b)-primaryCompleteness(a) || Number(a.id)-Number(b.id);
+    })[0]||null;
+  }
+
   function primaryQuality(a,data,dupMap){
+    const comments=String(a.Comments||'');
+    if(/\[QC:duplicate_resolved(?:->[^\]]+)?\]/i.test(comments)){
+      return {label:'Doublon résolu',cl:'ok',detail:'Ancienne fiche conservée et archivée après fusion validée.',countable:false};
+    }
+    if(/\[QC:validated\]/i.test(comments)){
+      return {label:'Validé',cl:'ok',detail:'Référence validée manuellement par le laboratoire.',countable:false};
+    }
+    if(/\[QC:review\]/i.test(comments)){
+      return {label:'À vérifier',cl:'warn',detail:'Contrôle scientifique demandé par le laboratoire.',countable:true};
+    }
     const missing=[];
     if(!String(a.Name||a.FullName||'').trim())missing.push('nom');
     if(!String(a.CatalogNumber||'').trim())missing.push('référence');
     if(!String(a.Supplier||'').trim())missing.push('fournisseur');
     if(!String(a.HostSpecies||'').trim())missing.push('hôte');
 
-    const key=`${norm(a.Supplier)}|${norm(a.CatalogNumber)}`;
-    if(norm(a.CatalogNumber) && (dupMap.get(key)||0)>1){
-      return {label:'Doublon ?',cl:'warn',detail:'Même fournisseur + référence présents plusieurs fois.',countable:true};
+    const key=`${norm(a.Supplier)}|${primaryRefKey(a.CatalogNumber)}`;
+    const duplicateGroup=dupMap.get(key)||[];
+    const canonical=primaryCanonical(duplicateGroup,data);
+    if(primaryRefKey(a.CatalogNumber) && duplicateGroup.length>1 && Number(canonical?.id)!==Number(a.id)){
+      return {label:'Doublon ?',cl:'warn',detail:`Même fournisseur + référence. Référence canonique proposée : ${canonical?.Name||canonical?.FullName||canonical?.Code||'fiche existante'}.`,countable:true};
     }
     if(missing.length){
       return {label:'À compléter',cl:'bad',detail:`Champs essentiels manquants : ${missing.join(', ')}.`,countable:true};
