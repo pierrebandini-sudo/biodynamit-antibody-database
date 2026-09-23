@@ -1,7 +1,7 @@
 /* BioDynaMit v11.7 — additive activity, search, quality and enrichment workflows. */
 (function(){
  'use strict';
- const VERSION='11.7.2',SEC='secondary_antibody',ACTOR_KEY='biodynamit.v117.actorName';
+ const VERSION='11.7.4',SEC='secondary_antibody',ACTOR_KEY='biodynamit.v117.actorName';
  const ns=window.BioDynaMitV117=window.BioDynaMitV117||{};
  const v112=window.BioDynaMitV112||{},v113=window.BioDynaMitV113||{},team=window.BioDynaMitTeamV115||{};
  const S={activity:[],dedup:new Map(),observer:null,activityReady:false,paletteIndex:0,lastUndo:null,actorName:'',actorPrompt:null,pendingActivity:[],flushingActivity:false};
@@ -84,8 +84,8 @@
  /* Global command/search palette. */
  function searchEntries(){
   const out=[{kind:'Action',icon:'⚗',title:'Construire un Panel IF',meta:'Outils équipe',search:'panel if immunofluorescence',open:()=>{team.tab='panel';go('team-tools')}}];
-  tr('Antibodies').forEach(a=>out.push({kind:'Primaire',icon:'Y',title:a.Name||a.FullName||a.Code,meta:[a.CatalogNumber,a.Supplier,a.HostSpecies].filter(Boolean).join(' · '),search:[a.Name,a.FullName,a.Code,a.CatalogNumber,a.Supplier,a.HostSpecies,a.Target].join(' '),open:()=>{state.selectedAntibody=Number(a.id);go('antibody-detail')}}));
-  try{const d=v112.inventoryData?.(SEC);(d?.items||[]).forEach(i=>out.push({kind:'Secondaire',icon:'S',title:i.name||i.code,meta:[i.catalogNumber,i.supplier,i.fluorophore].filter(Boolean).join(' · '),search:[i.name,i.code,i.catalogNumber,i.supplier,i.hostSpecies,i.targetSpecies,i.fluorophore].join(' '),open:()=>{v112.inventorySelected[SEC]=i.id;v112.inventoryView[SEC]='detail';go(`inv:${SEC}`)}}));}catch(_){ }
+  tr('Antibodies').filter(a=>a.Active!==false).forEach(a=>out.push({kind:'Primaire',icon:'Y',title:a.Name||a.FullName||a.Code,meta:[a.CatalogNumber,a.Supplier,a.HostSpecies].filter(Boolean).join(' · '),search:[a.Name,a.FullName,a.Code,a.CatalogNumber,a.Supplier,a.HostSpecies,a.Target].join(' '),open:()=>{state.selectedAntibody=Number(a.id);go('antibody-detail')}}));
+  try{const d=v112.inventoryData?.(SEC);(d?.items||[]).filter(i=>i.active!==false).forEach(i=>out.push({kind:'Secondaire',icon:'S',title:i.name||i.code,meta:[i.catalogNumber,i.supplier,i.fluorophore].filter(Boolean).join(' · '),search:[i.name,i.code,i.catalogNumber,i.supplier,i.hostSpecies,i.targetSpecies,i.fluorophore].join(' '),open:()=>{v112.inventorySelected[SEC]=i.id;v112.inventoryView[SEC]='detail';go(`inv:${SEC}`)}}));}catch(_){ }
   tr('Vials').forEach(v=>out.push({kind:'Vial',icon:'▥',title:v.Code||`V-${v.id}`,meta:'Exemplaire physique',search:[v.Code,v.Status,v.FillStatus].join(' '),open:()=>{const p=tr('Positions').find(x=>Number(x.Vial)===Number(v.id));if(p){state.selectedVial=Number(v.id);state.selectedBox=Number(p.Box);go('box3d')}else{go('vials')}}}));
   tr('Boxes').forEach(b=>out.push({kind:'Boîte',icon:'❄',title:b.Name||b.Code,meta:[b.Temperature,b.Rack].filter(Boolean).join(' · '),search:[b.Name,b.Code,b.Temperature,b.Rack].join(' '),open:()=>{state.selectedBox=Number(b.id);go('box3d')}}));
   tr('Documents').forEach(d=>out.push({kind:'Document',icon:'▣',title:d.Title||d.Link||'Document',meta:d.Type||'',search:[d.Title,d.Type,d.Notes,d.Link].join(' '),open:()=>d.Link?window.open(d.Link,'_blank','noopener'):go('documents')}));return out;
