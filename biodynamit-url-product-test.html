@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://r.jina.ai https://eu.r.jina.ai; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;">
+<title>BioDynaMit — Test ajout par URL</title>
+<style>
+:root{--bg:#f3f6f9;--card:#fff;--ink:#17324a;--muted:#657b8d;--line:#d6e0e8;--blue:#1069b6;--ok:#18794e;--okbg:#eaf8f0;--warn:#9a6700;--warnbg:#fff6da;--bad:#b42318;--badbg:#fff0ee}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--ink)}
+.wrap{max-width:1050px;margin:34px auto;padding:0 18px}
+.head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
+h1{font-size:27px;margin:0 0 5px} h2{font-size:18px;margin:0 0 12px}
+.sub{color:var(--muted);margin:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 3px 12px #17324a0c;margin-bottom:16px}
+label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}
+input,select{width:100%;border:1px solid #c8d6e2;border-radius:8px;padding:11px;background:#fff;color:var(--ink);font:inherit}
+button{border:1px solid #bfd0de;border-radius:8px;background:#fff;padding:10px 13px;font-weight:700;color:var(--ink);cursor:pointer}
+button.primary{background:var(--blue);color:white;border-color:var(--blue)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.actions{justify-content:flex-end;margin-top:14px}
+.grid2{display:grid;grid-template-columns:1fr 220px;gap:12px}
+.pill{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:700;border:1px solid var(--line)}
+.ok{color:var(--ok);background:var(--okbg);border-color:#bde6ce}.warn{color:var(--warn);background:var(--warnbg);border-color:#edd79d}.bad{color:var(--bad);background:var(--badbg);border-color:#f0c6c0}.neutral{color:#4c667a;background:#f0f4f7}
+.step{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;margin:10px 0}
+.num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#eaf1f7;font-weight:800}.step b{display:block}.small{font-size:12px;color:var(--muted)}
+.banner{padding:12px;border-radius:9px;border:1px solid var(--line);background:#f7fafc;margin:12px 0}
+.banner.ok{background:var(--okbg)}.banner.warn{background:var(--warnbg)}.banner.bad{background:var(--badbg)}
+.result-grid{display:grid;grid-template-columns:200px 1fr 170px;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.result-grid>div{padding:9px 11px;border-bottom:1px solid var(--line)}
+.rh{background:#f4f7fa;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+.value{font-weight:650}.source{font-size:11px;color:var(--muted)}
+pre{white-space:pre-wrap;word-break:break-word;background:#10263a;color:#dcebf7;border-radius:10px;padding:14px;max-height:460px;overflow:auto;font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}
+details summary{cursor:pointer;font-weight:700}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}.result-grid{grid-template-columns:130px 1fr}.result-grid .source{grid-column:2}.rh.source{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <div class="small" style="font-weight:800;letter-spacing:.08em">BIODYNAMIT · TEST URL PRODUIT</div>
+      <h1>Créer une fiche à partir de l’URL fournisseur</h1>
+      <p class="sub">Aucune donnée Grist n’est lue ou modifiée. Ce test vérifie seulement : URL officielle → Reader → champs reconnus.</p>
+    </div>
+    <span class="pill neutral">Test isolé</span>
+  </div>
+
+  <section class="card">
+    <h2>1. Coller l’URL officielle du produit</h2>
+    <div class="grid2">
+      <div>
+        <label>URL de la fiche fournisseur</label>
+        <input id="url" type="url" placeholder="https://www.abcam.com/... ou https://www.thermofisher.com/...">
+      </div>
+      <div>
+        <label>Endpoint Reader</label>
+        <select id="endpoint">
+          <option value="https://r.jina.ai/">r.jina.ai</option>
+          <option value="https://eu.r.jina.ai/">eu.r.jina.ai (UE)</option>
+        </select>
+      </div>
+    </div>
+    <div class="row actions">
+      <button id="presetAbcam">Exemple Abcam</button>
+      <button id="presetThermo">Exemple Thermo Fisher</button>
+      <button class="primary" id="run">Analyser la fiche</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Diagnostic</h2>
+    <div class="step"><div class="num">1</div><div><b id="s1">En attente</b><span class="small" id="s1d">Validation de l’URL fournisseur.</span></div></div>
+    <div class="step"><div class="num">2</div><div><b id="s2">En attente</b><span class="small" id="s2d">Lecture de la page par Reader.</span></div></div>
+    <div class="step"><div class="num">3</div><div><b id="s3">En attente</b><span class="small" id="s3d">Détection du produit et de la référence.</span></div></div>
+    <div class="step"><div class="num">4</div><div><b id="s4">En attente</b><span class="small" id="s4d">Extraction des caractéristiques.</span></div></div>
+    <div id="diagnostic"></div>
+  </section>
+
+  <section class="card" id="resultsCard" hidden>
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <div>
+        <h2 style="margin-bottom:3px">3. Préremplissage proposé</h2>
+        <p class="sub">Les champs non trouvés restent vides. Aucune valeur n’est inventée.</p>
+      </div>
+      <span class="pill" id="confidence">—</span>
+    </div>
+    <div class="result-grid" id="results"></div>
+  </section>
+
+  <section class="card" id="rawCard" hidden>
+    <details>
+      <summary>Afficher le texte brut renvoyé par Reader</summary>
+      <pre id="raw"></pre>
+    </details>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const compact = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+
+const suppliers = [
+  {key:'abcam', name:'Abcam', test:h=>h==='abcam.com'||h.endsWith('.abcam.com')},
+  {key:'thermo', name:'Thermo Fisher Scientific', test:h=>h==='thermofisher.com'||h.endsWith('.thermofisher.com')},
+  {key:'cst', name:'Cell Signaling Technology', test:h=>h==='cellsignal.com'||h.endsWith('.cellsignal.com')},
+  {key:'jackson', name:'Jackson ImmunoResearch', test:h=>h==='jacksonimmuno.com'||h.endsWith('.jacksonimmuno.com')},
+  {key:'biolegend', name:'BioLegend', test:h=>h==='biolegend.com'||h.endsWith('.biolegend.com')},
+  {key:'santacruz', name:'Santa Cruz Biotechnology', test:h=>h==='scbt.com'||h.endsWith('.scbt.com')},
+  {key:'cytiva', name:'Cytiva', test:h=>h==='cytivalifesciences.com'||h.endsWith('.cytivalifesciences.com')}
+];
+
+function step(id,title,detail,kind='neutral'){
+  $(id).textContent=title; $(id+'d').textContent=detail;
+  const n=$(id).closest('.step').querySelector('.num');
+  n.style.background=kind==='ok'?'#dff5e8':kind==='bad'?'#fde7e4':kind==='warn'?'#fff0c6':'#eaf1f7';
+}
+function diag(msg,kind='neutral'){$('#diagnostic').innerHTML=`<div class="banner ${kind}">${msg}</div>`}
+
+function cleanMd(s){
+  return String(s||'')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g,' ')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g,'$1')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/[`*_#>|]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function useful(v){
+  const s=cleanMd(v);
+  if(!s)return'';
+  if(/^image\s*\d*/i.test(s)||/chevron-(down|up|right|left)/i.test(s))return'';
+  if(/^(search|menu|close|login|sign in)$/i.test(s))return'';
+  return s;
+}
+function rawLines(text){return text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
+
+function detectSupplier(url){
+  const h=new URL(url).hostname.toLowerCase();
+  return suppliers.find(s=>s.test(h)) || {key:'other',name:h,test:()=>true};
+}
+async function reader(url){
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),45000);
+  try{
+    const res=await fetch($('#endpoint').value+url,{mode:'cors',headers:{Accept:'text/plain'},cache:'no-store',signal:ctrl.signal});
+    const text=await res.text();
+    if(!res.ok) throw new Error(`HTTP ${res.status} — ${text.slice(0,180)}`);
+    return {status:res.status,text};
+  } finally {clearTimeout(timer)}
+}
+
+function titleFrom(text){
+  const ls=rawLines(text);
+  for(const line of ls){
+    const m=line.match(/^Title:\s*(.+)$/i);
+    if(m){const v=useful(m[1]);if(v&&!/^search$/i.test(v))return v}
+  }
+  for(const line of ls){
+    if(/^#\s+/.test(line)){const v=useful(line.replace(/^#\s+/,''));if(v&&!/^search$/i.test(v))return v}
+  }
+  return'';
+}
+function findField(text,labels){
+  const ls=rawLines(text);
+  const wanted=labels.map(compact);
+  for(let i=0;i<ls.length;i++){
+    const cleaned=useful(ls[i].replace(/^#{1,6}\s*/,''));
+    if(!cleaned)continue;
+    for(let n=0;n<wanted.length;n++){
+      if(compact(cleaned)===wanted[n]){
+        for(let j=i+1;j<Math.min(i+7,ls.length);j++){
+          if(/^#{1,6}\s/.test(ls[j]))break;
+          const v=useful(ls[j].replace(/^[-*]\s*/,''));
+          if(v && v.length<350)return v;
+        }
+      }
+      const label=labels[n];
+      const re=new RegExp('^'+label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*[:\\-]\\s*(.+)$','i');
+      const m=cleaned.match(re);
+      if(m){const v=useful(m[1]);if(v)return v}
+    }
+  }
+  return'';
+}
+function rridFrom(text){
+  const m=text.match(/\bAB_[0-9]{5,}\b/i);
+  return m?m[0]:'';
+}
+function fluorFrom(text){
+  const m=text.match(/\b(Alexa\s*Fluor(?:™|®)?\s*\d{3}|DyLight\s*\d{3}|Cy\s*\d(?:\.\d)?|FITC|TRITC|APC|PE|HRP|Biotin)\b/i);
+  return m?cleanMd(m[1]):'';
+}
+function exEmFrom(text){
+  const m=text.match(/Excitation\/Emission Max[\s\S]{0,220}?(\d{3})\s*\/\s*(\d{3})\s*nm/i);
+  return m?{ex:m[1]+' nm',em:m[2]+' nm'}:{ex:'',em:''};
+}
+function catalogFrom(url,text){
+  const candidates=[];
+  try{
+    const p=decodeURIComponent(new URL(url).pathname);
+    const seg=p.split('/').filter(Boolean);
+    for(const s of seg){
+      if(/^ab\d{4,}$/i.test(s))candidates.push(s.match(/ab\d{4,}/i)[0]);
+      if(/^A-\d{4,}$/i.test(s))candidates.push(s.match(/A-\d{4,}/i)[0]);
+      if(/^[A-Z]{1,4}-?\d{3,}[A-Z0-9-]*$/i.test(s))candidates.push(s);
+    }
+  }catch(_){}
+  const bodyMatches=text.match(/\b(?:ab\d{4,}|A-\d{4,}|[A-Z]{1,4}-?\d{4,}[A-Z0-9-]*)\b/g)||[];
+  candidates.push(...bodyMatches.slice(0,40));
+  const scored=[...new Set(candidates)].map(x=>{
+    let score=0;
+    if(url.toLowerCase().includes(x.toLowerCase()))score+=100;
+    if(new RegExp('\\b'+x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(text.slice(0,18000)))score+=30;
+    return{x,score};
+  }).sort((a,b)=>b.score-a.score);
+  return scored[0]?.x||'';
+}
+
+function extract(url,text,supplier){
+  const exEm=exEmFrom(text);
+  let host=findField(text,['Host species','Host / Isotype','Host/Isotype','Host']);
+  let isotype=findField(text,['Isotype','Class / isotype','Class','Clonality']);
+  if(host.includes('/') && supplier.key==='thermo'){
+    const parts=host.split('/').map(x=>x.trim()).filter(Boolean);
+    if(parts.length>1){host=parts[0]; if(!isotype)isotype=parts.slice(1).join(' / ')}
+  }
+  return {
+    'Nom': titleFrom(text),
+    'Fournisseur': supplier.name,
+    'Référence catalogue': catalogFrom(url,text),
+    'Cible': findField(text,['Target','Specificity','Antigen']),
+    'Espèce cible / réactivité': findField(text,['Reacts with','Species Reactivity','Species reactivity','Reactivity','Target species']),
+    'Espèce hôte': host,
+    'Classe / isotype / clonalité': isotype,
+    'Clone': findField(text,['Clone number','Clone ID','Clone']),
+    'Fluorophore / conjugué': findField(text,['Conjugate','Conjugation','Fluorophore']) || fluorFrom(text),
+    'Excitation': findField(text,['Excitation','Excitation wavelength','Excitation maximum']) || exEm.ex,
+    'Émission': findField(text,['Emission','Emission wavelength','Emission maximum']) || exEm.em,
+    'Applications': findField(text,['Applications','Tested applications','Application']),
+    'Stockage': findField(text,['Storage conditions','Storage','Storage recommendation']),
+    'Poids moléculaire': findField(text,['Molecular weight','Predicted molecular weight']),
+    'RRID': rridFrom(text),
+    'URL produit': url
+  };
+}
+function validateProduct(url,text,data){
+  const catalog=data['Référence catalogue'];
+  const title=data['Nom'];
+  return {
+    urlOk:/^https?:\/\//i.test(url),
+    titleOk:!!title && !/^search$/i.test(title),
+    catalogOk:!!catalog && (url.toLowerCase().includes(catalog.toLowerCase()) || text.toLowerCase().includes(catalog.toLowerCase()))
+  };
+}
+function render(data,text){
+  const fields=Object.keys(data);
+  let found=0;
+  const rows=fields.map(k=>{
+    const v=useful(data[k]); if(v)found++;
+    const src=v?(k==='URL produit'?'URL fournie':k==='Fournisseur'?'Déduit du domaine':'Fiche fournisseur via Reader'):'Non trouvé';
+    return `<div class="rh">${esc(k)}</div><div class="value">${v?esc(v):'<span style="color:#8a9aa7;font-weight:500">—</span>'}</div><div class="source">${esc(src)}</div>`;
+  }).join('');
+  $('#results').innerHTML=`<div class="rh">Champ</div><div class="rh">Valeur reconnue</div><div class="rh source">Provenance</div>${rows}`;
+  $('#resultsCard').hidden=false; $('#rawCard').hidden=false; $('#raw').textContent=text;
+  const c=$('#confidence'); c.className='pill '+(found>=11?'ok':found>=7?'warn':'neutral'); c.textContent=`${found}/${fields.length} champs détectés`;
+}
+
+async function run(){
+  const url=$('#url').value.trim();
+  $('#resultsCard').hidden=true; $('#rawCard').hidden=true; $('#diagnostic').innerHTML='';
+  step('#s1','Validation…','Analyse de l’URL');
+  step('#s2','En attente','Lecture Reader');
+  step('#s3','En attente','Produit/référence');
+  step('#s4','En attente','Extraction');
+  if(!url)return diag('Colle d’abord une URL produit officielle.','warn');
+  let supplier;
+  try{
+    const parsed=new URL(url);
+    if(!/^https?:$/.test(parsed.protocol))throw new Error('Protocole non autorisé');
+    supplier=detectSupplier(url);
+    step('#s1','URL valide',`${supplier.name} · ${parsed.hostname}`,'ok');
+  }catch(err){
+    step('#s1','URL invalide',String(err.message||err),'bad');
+    return diag('L’URL fournie n’est pas valide.','bad');
+  }
+  $('#run').disabled=true;
+  try{
+    const r=await reader(url);
+    step('#s2','Page lue par Reader',`HTTP ${r.status}`,'ok');
+    const data=extract(url,r.text,supplier);
+    const val=validateProduct(url,r.text,data);
+    if(!val.titleOk || !val.catalogOk){
+      step('#s3','Validation produit incomplète',`Titre: ${val.titleOk?'OK':'non'} · Référence: ${val.catalogOk?'OK':'non'}`,'warn');
+      step('#s4','Extraction affichée pour diagnostic','Aucune création automatique ne serait autorisée tant que la validation est incomplète.','warn');
+      render(data,r.text);
+      return diag('La page est lisible, mais la validation stricte du produit est incomplète. On peut ajuster le parseur sans toucher à Grist.','warn');
+    }
+    step('#s3','Produit validé',`${data['Référence catalogue']} · ${data['Nom']}`,'ok');
+    step('#s4','Extraction terminée','Les champs trouvés sont affichés ci-dessous.','ok');
+    render(data,r.text);
+    diag('✓ La méthode URL → Reader fonctionne pour cette fiche. Le prochain objectif est d’améliorer seulement les champs éventuellement manquants.','ok');
+  }catch(err){
+    const msg=String(err?.message||err);
+    step('#s2','Échec Reader',msg,'bad');
+    step('#s3','Non exécuté','—','bad');
+    step('#s4','Non exécuté','—','bad');
+    diag(`<b>La page n’a pas pu être lue via Reader.</b><br>${esc(msg)}`,'bad');
+  }finally{$('#run').disabled=false}
+}
+
+$('#run').onclick=run;
+$('#presetAbcam').onclick=()=>{$('#url').value='https://www.abcam.com/en-us/products/primary-antibodies/human-igg-antibody-epr4421-ab109489'};
+$('#presetThermo').onclick=()=>{$('#url').value='https://www.thermofisher.com/antibody/product/goat-anti-Rabbit-IgG-H-L-Cross-Adsorbed-Secondary-Antibody-Polyclonal/A-21244'};
+})();
+</script>
+</body>
+</html>
