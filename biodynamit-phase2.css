@@ -1,8 +1,0 @@
-.phase2-sync-bar{position:fixed;left:230px;right:0;bottom:0;z-index:35;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:7px 14px;background:#f8fafc;border-top:1px solid #d8e1e9;color:#435970;font-size:12px}
-.sidebar{min-height:0;overflow:hidden}
-.sidebar .nav{min-height:0;overflow-y:auto;flex:1}
-.sidebar .brand,.sidebar-bottom{flex-shrink:0}
-.main{padding-bottom:70px}
-.phase2-sync-bar span{flex:1;min-width:180px}
-.phase2-sync-bar.phase2-error{color:#9b2232;background:#fff0f2}
-@media(max-width:1000px){.phase2-sync-bar{left:76px}}

@@ -93,24 +93,26 @@
     return !v113.securityEnabled || v113.role==='admin' || v113.role==='unconfigured' || !v113.role;
   }
   async function refreshTeamData(){
-    if(!state?.connected||!window.grist){team.ready=false;return false;}
-    if(team._readPromise)return team._readPromise;
+    if(!state?.connected || !window.grist){team.ready=false;return false;}
+    if(team.loading)return false;
     team.loading=true;
-    team._readPromise=(async()=>{
-      try{
-        const tables=await BioDynaMitDataPhase2.listTables();
-        await BioDynaMitDataPhase2.ensure(TEAM_TABLES,{reason:'team'});
-        for(const name of TEAM_TABLES)if(tables.includes(name))team.data[name]=await BioDynaMitDataPhase2.readTable(name);
-        team.ready=TEAM_TABLES.every(t=>tables.includes(t));team.checked=true;team.error=null;return team.ready;
-      }catch(error){team.error=error;team.ready=false;throw error;}
-      finally{team.loading=false;team._readPromise=null;}
-    })();return team._readPromise;
+    try{
+      const tables=await grist.docApi.listTables();
+      for(const name of TEAM_TABLES){
+        if(tables.includes(name)){
+          try{team.data[name]=await grist.docApi.fetchTable(name);}catch(_){team.data[name]=null;}
+        }else team.data[name]=null;
+      }
+      team.ready=TEAM_TABLES.every(t=>tables.includes(t));
+      team.checked=true;
+      return team.ready;
+    }finally{team.loading=false;}
   }
   async function initTeamSchema(){
     if(!state?.connected)return toast('Connexion Grist requise.');
     if(!canAdminSchema())return toast('Initialisation réservée à un administrateur.');
     try{
-      const current=new Set(await BioDynaMitDataPhase2.listTables());
+      const current=new Set(await grist.docApi.listTables());
       const created=[];
       for(const [name,cols] of Object.entries(TEAM_SCHEMAS)){
         if(current.has(name))continue;
@@ -566,8 +568,6 @@
   }
 
   function renderTeamTools(){
-    if(BioDynaMitDataPhase2.gate())return;
-    BioDynaMitDataPhase2.captureView();
     if(!state?.connected){shell('<div class="card card-pad"><div class="v115-warn">Les outils d’équipe nécessitent la connexion au document Grist.</div></div>');return;}
     if(!team.ready){shell(team.loading?loadingHtml():setupHtml());if(!team.loading&&!team.checked)refreshTeamData().then(()=>{if(state.route==='team-tools')renderTeamTools();});document.querySelector('#v115Init')?.addEventListener('click',initTeamSchema);return;}
     let body='';switch(team.tab){case'search':body=searchHtml();break;case'panel':body=panelHtml();break;case'reviews':body=reviewsHtml();break;case'usage':body=usageHtml();break;case'orders':body=ordersHtml();break;case'inventory':body=inventoryHtml();break;case'microscopes':body=microscopesHtml();break;case'labels':body=labelsHtml();break;default:body=overviewHtml();}
@@ -580,12 +580,7 @@
     bindVialPanelUsage();
   }
   function installObserver(){if(team._observer)return;let scheduled=false;team._observer=new MutationObserver(()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;try{injectContextCard();}catch(err){console.warn('v11.5 context:',err);}});});team._observer.observe(document.body,{childList:true,subtree:true});}
-  async function bootstrap(){
-    installRoute();installObserver();
-    try{await window.BioDynaMitConnection;if(state.connected){await refreshTeamData();injectContextCard();}}
-    catch(error){BioDynaMitDataPhase2.onError(error,TEAM_TABLES);}
-  }
-
+  async function bootstrap(){installRoute();installObserver();let n=0;const wait=async()=>{n++;if(state?.connected){await refreshTeamData();injectContextCard();return;}if(n<40)setTimeout(wait,250);};wait();}
 
   team.refresh=refreshTeamData;team.initSchema=initTeamSchema;team.render=renderTeamTools;team.allItems=allItems;team.allUnits=allUnits;team.openOrderFor=openOrderFor;team.showOrderModal=showOrderModal;team.openExistingOrder=openExistingOrder;team.qrMatrix=qrMatrix;team.qrSvg=qrSvg;team.resolveScan=resolveScan;team._orderTest={isOpenOrder,orderKey,pendingOrders,lowStockItems};
   bootstrap();

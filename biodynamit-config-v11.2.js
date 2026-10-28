@@ -279,21 +279,20 @@
   function tableRows(name){ return rows(state.data[name]||ns.data[name]); }
   function esc12(v){ return esc(v); }
 
-  BioDynaMitDataPhase2.register(CREATE_ORDER);
-  async function refreshTables({fresh=true}={}){
-    if(!state.connected)return;
-    ns.loadState='loading';ns.loadError=null;
-    try{
-      await BioDynaMitDataPhase2.ensure(CREATE_ORDER,{fresh,reason:'configuration'});
-      state.tables=await BioDynaMitDataPhase2.listTables();
-      ns.ready=[...CONFIG_TABLES].every(t=>state.tables.includes(t));ns.loadState='ready';
-    }catch(error){ns.loadState='error';ns.loadError=error;throw error;}
+  async function refreshTables(){
+    if(!state.connected) return;
+    const current=await grist.docApi.listTables();
+    state.tables=current;
+    const present=CREATE_ORDER.filter(t=>current.includes(t));
+    const result=await Promise.all(present.map(async t=>[t,await grist.docApi.fetchTable(t)]));
+    for(const [t,data] of result){ ns.data[t]=data; state.data[t]=data; }
+    ns.ready=CONFIG_TABLES.size>0 && [...CONFIG_TABLES].every(t=>current.includes(t));
   }
   ns.refreshTables=refreshTables;
 
   async function ensureSchema(){
     if(!state.connected) return toast('Connexion Grist requise pour initialiser v11.2.');
-    const current=new Set(await BioDynaMitDataPhase2.listTables());
+    const current=new Set(await grist.docApi.listTables());
     const created=[];
     const completed=[];
     for(const table of CREATE_ORDER){
@@ -303,7 +302,7 @@
         continue;
       }
       // v11.2 schema upgrades are additive: add only missing columns, never remove/rename user data.
-      const raw=await BioDynaMitDataPhase2.readTable(table);
+      const raw=await grist.docApi.fetchTable(table);
       const cols=new Set(Array.isArray(raw)?Object.keys(raw[0]||{}):Object.keys(raw||{}));
       const missingCols=SCHEMAS[table].filter(c=>!cols.has(c.id));
       if(missingCols.length){
@@ -328,7 +327,7 @@
       const cols=Object.keys(recs[0]);
       const vals=Object.fromEntries(cols.map(c=>[c,recs.map(r=>r[c]??null)]));
       await grist.docApi.applyUserActions([['BulkAddRecord',table,Array(recs.length).fill(null),vals]]);
-      const fresh=await BioDynaMitDataPhase2.readTable(table); ns.data[table]=fresh; state.data[table]=fresh;
+      const fresh=await grist.docApi.fetchTable(table); ns.data[table]=fresh; state.data[table]=fresh;
     }
   }
 
@@ -347,7 +346,7 @@
     await grist.docApi.applyUserActions([['AddRecord','ConfigVersions',null,{
       Date:Date.now()/1000,Version:ns.version,User:'Grist',Summary:summary,SnapshotJSON:snap
     }]]);
-    const fresh=await BioDynaMitDataPhase2.readTable('ConfigVersions'); ns.data.ConfigVersions=fresh; state.data.ConfigVersions=fresh;
+    const fresh=await grist.docApi.fetchTable('ConfigVersions'); ns.data.ConfigVersions=fresh; state.data.ConfigVersions=fresh;
   }
   ns.saveConfigVersion=saveConfigVersion;
 
@@ -408,7 +407,7 @@
     if(!state.connected) return toast('Connexion Grist requise.');
     const action=id?['UpdateRecord',table,Number(id),record]:['AddRecord',table,null,record];
     await grist.docApi.applyUserActions([action]);
-    const fresh=await BioDynaMitDataPhase2.readTable(table); ns.data[table]=fresh; state.data[table]=fresh;
+    const fresh=await grist.docApi.fetchTable(table); ns.data[table]=fresh; state.data[table]=fresh;
   }
   ns.writeRecord=writeRecord;
 
@@ -468,36 +467,7 @@
     });
   }
 
-  function duplicatePairsAt50(records,primaryScope=false){
-    // duplicateScore reaches 50 only with a shared nonempty catalogue (60),
-    // or ALL of name (25), target (10), fluorophore (10), host (5).
-    // Index these necessary conditions, then keep the original scoring function
-    // as final authority. This preserves scores, reasons, ordering and IDs.
-    const groups=new Map(),prepared=[];
-    records.forEach((row,index)=>{
-      const type=primaryScope?'primary':row.InventoryType;
-      let group=groups.get(type);if(!group){group={catalog:new Map(),signature:new Map()};groups.set(type,group);}
-      const catalog=core.normalizeText(row.catalogNumber||row.CatalogNumber);
-      const other=[row.name||row.Name,row.target||row.Target||row.targetSpecies||row.TargetSpecies,row.fluorophore||row.Fluorophore,row.hostSpecies||row.HostSpecies].map(core.normalizeText);
-      const signature=other.every(Boolean)?JSON.stringify(other):'';
-      for(const [map,key] of [[group.catalog,catalog],[group.signature,signature]]){
-        if(!key)continue;if(!map.has(key))map.set(key,[]);map.get(key).push(index);
-      }
-      prepared.push({group,catalog,signature});
-    });
-    const pairs=[];
-    prepared.forEach(({group,catalog,signature},i)=>{
-      const indices=new Set([...(group.catalog.get(catalog)||[]),...(group.signature.get(signature)||[])]);
-      for(const j of [...indices].filter(j=>j>i).sort((a,b)=>a-b)){
-        if(!primaryScope&&records[i].InventoryType!==records[j].InventoryType)continue;
-        const score=core.duplicateScore(records[i],records[j]);
-        if(score.score>=50)pairs.push({a:records[i],b:records[j],...score,scope:primaryScope?'primary':records[i].InventoryType});
-      }
-    });
-    return pairs;
-  }
-
-  function storageIntegrityReport(){
+  function integrityReport(){
     const primary=core.checkStorageIntegrity({
       containers:rows(state.data.Boxes).map(x=>({...x,code:String(x.id)})),
       units:rows(state.data.Vials).map(x=>({...x,code:String(x.id)})),
@@ -509,14 +479,18 @@
       positions:tableRows('InventoryPositions').map(x=>({containerCode:String(x.Container||''),slot:x.Slot,unitCode:x.Unit?String(x.Unit):'',available:x.Available}))
     });
 
-    return {primary,generic};
-  }
-  ns.storageIntegrityReport=storageIntegrityReport;
-  function integrityReport(){
-    const {primary,generic}=storageIntegrityReport();
+    const dup=[];
     const abs=rows(state.data.Antibodies);
+    for(let i=0;i<abs.length;i++) for(let j=i+1;j<abs.length;j++){
+      const d=core.duplicateScore(abs[i],abs[j]);
+      if(d.score>=50) dup.push({a:abs[i],b:abs[j],...d,scope:'primary'});
+    }
     const items=tableRows('InventoryItems');
-    const dup=[...duplicatePairsAt50(abs,true),...duplicatePairsAt50(items)];
+    for(let i=0;i<items.length;i++) for(let j=i+1;j<items.length;j++){
+      if(items[i].InventoryType!==items[j].InventoryType) continue;
+      const d=core.duplicateScore(items[i],items[j]);
+      if(d.score>=50) dup.push({a:items[i],b:items[j],...d,scope:items[i].InventoryType});
+    }
     ns.lastIntegrity={primary,generic,duplicates:dup};
     return ns.lastIntegrity;
   }
@@ -688,7 +662,6 @@
 
   const baseAdmin=admin;
   admin=function(){
-    if(BioDynaMitDataPhase2.gate())return;
     topbar('Administration');
     content.innerHTML=`<h1 class="page-title">Administration v11.2</h1>
       <p class="subtitle">Paramètres de la BDD, règles, nouveaux inventaires et contrôles — sans modifier le code pour les évolutions courantes.</p>
@@ -716,5 +689,19 @@
   };
   ns.baseAdmin=baseAdmin;
 
-  // Initial reads are coordinated by the explicit Phase 2 data service.
+  // Load v11.2 tables on every normal reload without changing app.js.
+  const baseLoadAll=loadAll;
+  loadAll=async function(){
+    await baseLoadAll();
+    try{ await refreshTables(); }catch(err){ console.warn('v11.2 config load:',err); }
+  };
+
+  // Initial opportunistic read. No schema write.
+  setTimeout(async()=>{
+    try{
+      if(state.connected) await refreshTables();
+      if(state.route==='admin') admin();
+      else if(typeof renderNav==='function') renderNav();
+    }catch(err){ console.warn('BioDynaMit v11.2 init:',err); }
+  },50);
 })();

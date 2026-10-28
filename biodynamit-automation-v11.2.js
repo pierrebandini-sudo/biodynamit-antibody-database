@@ -220,7 +220,7 @@
     const filtered=records.filter(r=>!queueExists(r.TargetCode,r.Link,r.Title));if(!filtered.length)return;
     const cols=Object.keys(filtered[0]),vals=Object.fromEntries(cols.map(c=>[c,filtered.map(r=>r[c]??null)]));
     await grist.docApi.applyUserActions([['BulkAddRecord','EnrichmentQueue',Array(filtered.length).fill(null),vals]]);
-    const fresh=await BioDynaMitDataPhase2.readTable('EnrichmentQueue');state.data.EnrichmentQueue=fresh;ns.data.EnrichmentQueue=fresh;
+    const fresh=await grist.docApi.fetchTable('EnrichmentQueue');state.data.EnrichmentQueue=fresh;ns.data.EnrichmentQueue=fresh;
   }
 
   function officialWebsiteCertain(a){
@@ -311,7 +311,6 @@
 
   const baseDocuments=documents;
   documents=function(){
-    if(BioDynaMitDataPhase2.gate())return;
     topbar('Documents');
     const pdocs=tr('Documents'),gdocs=tr('InventoryDocuments');
     content.innerHTML=`<h1 class="page-title">Documents & enrichissement</h1><p class="subtitle">Datasheets, protocoles, publications, images et suggestions automatiques à valider.</p>
@@ -332,7 +331,7 @@
     const generic=tr('InventoryUnits').map(v=>({...v,Code:v.Code||`U-${v.id}`}));
     const a=[...core.buildRuleAlerts(primary,rules,'unit').map(x=>({...x,scope:'Primaires'})),...core.buildRuleAlerts(generic,rules,'unit').map(x=>({...x,scope:'Inventaires'}))];
     if(flag('integrity_checks',true)&&ns.integrityReport){
-      const r=ns.storageIntegrityReport();
+      const r=ns.integrityReport();
       for(const x of r.primary)a.push({severity:x.severity,scope:'Primaires',title:'Intégrité',entityCode:'',message:x.message});
       for(const x of r.generic)a.push({severity:x.severity,scope:'Inventaires',title:'Intégrité',entityCode:'',message:x.message});
     }
@@ -354,10 +353,9 @@
   // -------- Dashboard augmentation --------
   const baseDashboard=dashboard;
   dashboard=function(){
-    if(ns.showInventoryLoadState?.())return;
     baseDashboard();
-    const m=window.BioDynaMitSecondary2025,data={items:tr('InventoryItems').filter(x=>x.InventoryType==='secondary_antibody'),units:tr('InventoryUnits').filter(x=>x.InventoryType==='secondary_antibody').map(x=>({status:x.Status}))},pending=pendingQueue().length;
-    let integrity=0;try{const r=ns.storageIntegrityReport?.();integrity=(r?.primary?.length||0)+(r?.generic?.length||0);}catch(_){}
+    const m=window.BioDynaMitSecondary2025,data=ns.inventoryData?.('secondary_antibody'),pending=pendingQueue().length;
+    let integrity=0;try{const r=ns.integrityReport?.();integrity=(r?.primary?.length||0)+(r?.generic?.length||0);}catch(_){}
     const section=document.createElement('div');section.className='card card-pad v112-dashboard';section.style.marginTop='16px';
     section.innerHTML=`<div class="row space-between"><div><h3 class="section-title">⚙ Automatisation v11.2</h3><p class="subtitle">Configuration Grist, nouveaux inventaires et enrichissement automatique.</p></div><button class="btn" id="v112DashAdmin">Administration</button></div>
       <div class="grid grid-4" style="margin-top:12px"><div><b>${ns.ready?'OK':'À initialiser'}</b><small> configuration</small></div>

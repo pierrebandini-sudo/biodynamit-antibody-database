@@ -128,7 +128,6 @@
 
   async function fileChosen(file){
     if(!file)return;
-    if(!window.XLSX)await window.BioDynaMitDependenciesV1183.xlsx();
     if(!window.XLSX)return toast('La librairie XLSX n’a pas pu être chargée.');
     const buf=await file.arrayBuffer();IMP.workbook=XLSX.read(buf,{type:'array'});IMP.fileName=file.name;IMP.sheetName=IMP.workbook.SheetNames[0]||'';
     IMP.rows=sheetRows();IMP.headerRow=bestHeaderRow(IMP.rows);IMP.type=genericTypes().find(x=>x.Enabled!==false)?.Key||genericTypes()[0]?.Key||'secondary_antibody';IMP.mapping={};rebuildMapping();renderImportWorkspace();
@@ -204,7 +203,7 @@
         }else{
           const rec={...p.core,RawTable:`${IMP.fileName}:${IMP.sheetName}`,RawRowId:p.sourceRow};
           await grist.docApi.applyUserActions([['AddRecord','InventoryItems',null,rec]]);
-          const fresh=await BioDynaMitDataPhase2.readTable('InventoryItems');state.data.InventoryItems=fresh;ns.data.InventoryItems=fresh;
+          const fresh=await grist.docApi.fetchTable('InventoryItems');state.data.InventoryItems=fresh;ns.data.InventoryItems=fresh;
           const created=rows(fresh).find(x=>x.Code===rec.Code);
           if(created)await addAttributes(created.id,IMP.type,p.attributes,`${IMP.fileName} / ${IMP.sheetName} / row ${p.sourceRow}`);
           added++;

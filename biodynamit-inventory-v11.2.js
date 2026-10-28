@@ -77,22 +77,7 @@
   }
 
   function er(v){ return esc(v); }
-  // A read scope lasts exactly one synchronous inventoryData() call. No data
-  // survive that call: a later read always sees current Grist snapshots, including
-  // in-place edits and the attribute-value fix applied by the historical module.
-  let readScope=null;
-  function trows(name){
-    if(!readScope)return rows(state.data[name]||ns.data?.[name]);
-    if(!readScope.tables.has(name))readScope.tables.set(name,rows(state.data[name]||ns.data?.[name]));
-    return readScope.tables.get(name);
-  }
-  function readOnce(kind,type,build){
-    if(!readScope)return build(type);
-    let values=readScope.models.get(kind);
-    if(!values){values=new Map();readScope.models.set(kind,values);}
-    if(!values.has(type))values.set(type,build(type));
-    return values.get(type);
-  }
+  function trows(name){ return rows(state.data[name]||ns.data?.[name]); }
   function tableHasFields(name,fields){
     const table=state.data[name]||ns.data?.[name];
     if(!table)return false;
@@ -108,17 +93,6 @@
   function manifest(){ return window.BioDynaMitSecondary2025||null; }
 
   function attrRowsFor(itemId,type){
-    if(readScope){
-      if(!readScope.attributes){
-        const index=new Map();
-        for(const a of trows('InventoryAttributes')){
-          let byItem=index.get(a.InventoryType);if(!byItem){byItem=new Map();index.set(a.InventoryType,byItem);}
-          const id=Number(a.Item);let list=byItem.get(id);if(!list){list=[];byItem.set(id,list);}list.push(a);
-        }
-        readScope.attributes=index;
-      }
-      return readScope.attributes.get(type)?.get(Number(itemId))||[];
-    }
     return trows('InventoryAttributes').filter(x=>Number(x.Item)===Number(itemId) && x.InventoryType===type);
   }
 
@@ -152,8 +126,7 @@
     };
   }
 
-  function itemsFor(type){return readOnce('items',type,readItemsFor);}
-  function readItemsFor(type){
+  function itemsFor(type){
     const live=trows('InventoryItems').filter(x=>x.InventoryType===type);
     if(live.length) return live.map(mapGristItem);
     if(type===MANIFEST_TYPE && manifest()) return manifest().items.map(mapManifestItem);
@@ -186,8 +159,7 @@
     };
   }
 
-  function unitsFor(type){return readOnce('units',type,readUnitsFor);}
-  function readUnitsFor(type){
+  function unitsFor(type){
     const items=itemsFor(type);
     const mapNum=new Map(items.filter(x=>typeof x.id==='number').map(x=>[Number(x.id),x]));
     const live=trows('InventoryUnits').filter(x=>x.InventoryType===type);
@@ -199,8 +171,7 @@
     return [];
   }
 
-  function containersFor(type){return readOnce('containers',type,readContainersFor);}
-  function readContainersFor(type){
+  function containersFor(type){
     const live=trows('InventoryContainers').filter(x=>x.InventoryType===type);
     if(live.length) return live.map(r=>{
       const fallback=type===MANIFEST_TYPE?manifest()?.containers?.find(c=>c.code===r.Code):null;
@@ -241,11 +212,8 @@
   }
 
   function inventoryData(type){
-    const previous=readScope;readScope={tables:new Map(),models:new Map(),attributes:null};
-    try{
-      const items=itemsFor(type),units=unitsFor(type),containers=containersFor(type),positions=positionsFor(type);
-      return {type,mode:isGristType(type)?'grist':(type===MANIFEST_TYPE&&manifest()?'manifest':'empty'),items,units,containers,positions};
-    }finally{readScope=previous;}
+    const items=itemsFor(type),units=unitsFor(type),containers=containersFor(type),positions=positionsFor(type);
+    return {type,mode:isGristType(type)?'grist':(type===MANIFEST_TYPE&&manifest()?'manifest':'empty'),items,units,containers,positions};
   }
   ns.inventoryData=inventoryData;
 
@@ -274,7 +242,6 @@
   // Dynamic navigation: normal menus are preserved; enabled generic inventories are injected after Anticorps.
   const baseRenderNav=renderNav;
   renderNav=function(){
-    const navScroll=document.querySelector('#nav')?.scrollTop||0;
     const generic=genericNavTypes();
     const base=navItems.filter(([r])=>!String(r).startsWith('inv:'));
     const out=[];
@@ -285,7 +252,6 @@
       }
     }
     $('#nav').innerHTML=out.map(([r,ic,l])=>`<button class="nav-item ${state.route===r?'active':''}" data-route="${er(r)}"><span>${er(ic)}</span><span>${er(l)}</span></button>`).join('');
-    $('#nav').scrollTop=navScroll;
     document.querySelectorAll('[data-route]').forEach(b=>b.onclick=()=>{
       const r=b.dataset.route;
       if(r.startsWith('inv:')){
@@ -333,8 +299,6 @@
   }
 
   function renderInventory(type){
-    if(ns.showInventoryLoadState?.())return;
-    BioDynaMitDataPhase2.captureView();
     const data=inventoryData(type);
     const cfg=typeHeader(type,data);
     const view=ns.inventoryView[type]||'list';
@@ -344,19 +308,6 @@
     bindTypeViews(type,data,cfg);
   }
   ns.renderInventory=renderInventory;
-  ns.showInventoryLoadState=function(){
-    if(BioDynaMitDataPhase2.gate())return true;
-    if(state.initialStatus==='error')return true;
-    if(state.initialStatus==='loading'||(ns.loadState==='loading'&&!state.data.InventoryItems)){
-      content.innerHTML='<div class="bd1183-status" role="status">Chargement des données Grist…</div>';return true;
-    }
-    if(ns.loadError){
-      content.innerHTML=`<div class="bd1183-status" role="alert"><b>Lecture des inventaires incomplète</b><p>${er(ns.loadError.message||ns.loadError)}</p><p>Les données ne sont pas présentées comme un inventaire vide.</p><button class="btn" id="bd1183ReloadData">Réessayer la lecture</button></div>`;
-      document.querySelector('#bd1183ReloadData').onclick=async()=>{try{await loadAll({force:true});render()}catch(error){toast(`Lecture impossible : ${error.message||error}`)}};
-      return true;
-    }
-    return false;
-  };
 
   function genericFieldInput(field){
     const id=`v112NewItem_${field.FieldKey}`;
@@ -487,7 +438,7 @@
       <div class="card table-wrap" style="margin-top:14px">
         <table class="table"><thead><tr>
           <th>Nom</th><th>Cible</th><th>Fluorophore</th><th>Ex / Em</th><th>Hôte</th><th>Fournisseur</th><th>Référence</th><th>Stock</th>
-        </tr></thead><tbody id="v112InvBody"></tbody></table>
+        </tr></thead><tbody id="v112InvBody">${itemRowsHtml(data,filtered)}</tbody></table>
       </div>
       ${type===MANIFEST_TYPE?secondaryQualityBlock(data):''}`;
 
@@ -496,16 +447,14 @@
       ns.inventoryView[type]='detail';
       renderInventory(type);
     });
-    const table=$('#v112InvBody').closest('table');
-    table._bdInventoryData=data;
-    const pager=window.BioDynaMitListViewV1183.mount({table,key:`inventory:${type}`,items:filtered,renderRows:list=>itemRowsHtml(data,list),onDraw:bind});
     $('#v112InvSearch').oninput=e=>{
       ns.inventorySearch[type]=e.target.value;
-      pager.setItems(searchItems(data,e.target.value),{reset:true});
+      $('#v112InvBody').innerHTML=itemRowsHtml(data,searchItems(data,e.target.value));
+      bind();
     };
     $('#v112InvClear').onclick=()=>{
       ns.inventorySearch[type]=''; $('#v112InvSearch').value='';
-      pager.setItems(data.items,{reset:true}); $('#v112InvSearch').focus();
+      $('#v112InvBody').innerHTML=itemRowsHtml(data,data.items); bind(); $('#v112InvSearch').focus();
     };
     $('#v112ImportSecondary')?.addEventListener('click',showSecondaryImport);
     bind();
@@ -513,13 +462,8 @@
 
   function itemRowsHtml(data,list){
     if(!list.length) return '<tr><td colspan="8"><div class="empty">Aucun résultat.</div></td></tr>';
-    const counts=new Map(),candidates=new Map();
-    for(const u of data.units){
-      const key=String(u.itemCode||'');counts.set(key,(counts.get(key)||0)+1);
-      if(!u.itemCode){const c=String(u.candidateItemCode||'');candidates.set(c,(candidates.get(c)||0)+1);}
-    }
     return list.map(i=>{
-      const n=counts.get(String(i.code))||0, pending=candidates.get(String(i.code))||0;
+      const n=countUnitsForItem(data,i), pending=candidateUnitsForItem(data,i);
       return `<tr>
         <td><button class="v112-link-btn" data-v112-item="${er(i.id)}"><b>${er(i.name)}</b></button></td>
         <td>${er(i.targetSpecies||i.target||'—')}</td>
@@ -1010,14 +954,6 @@
     $('#v112RemoveUnit')?.addEventListener('click',()=>removeGenericUnit(type,p));
   }
 
-  async function withSavingButton(button,operation){
-    if(button?.disabled)return;
-    const label=button?.textContent;
-    if(button){button.disabled=true;button.textContent='Enregistrement…';button.setAttribute('aria-busy','true');}
-    try{return await operation();}
-    finally{if(button?.isConnected){button.disabled=false;button.textContent=label;button.removeAttribute('aria-busy');}}
-  }
-
   function generatedCode(prefix='UNIT'){
     const d=new Date(),pad=n=>String(n).padStart(2,'0');
     return `${prefix}-${String(d.getFullYear()).slice(-2)}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${Math.floor(Math.random()*90+10)}`;
@@ -1039,7 +975,7 @@
       <div class="field" style="margin-top:12px"><label>Commentaires</label><textarea id="v112UnitComments"></textarea></div>
       <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn" id="v112UnitCancel">Annuler</button><button class="btn btn-primary" id="v112UnitSave">Créer et positionner</button></div>`);
     $('#v112UnitCancel').onclick=closeModal;
-    $('#v112UnitSave').onclick=()=>withSavingButton($('#v112UnitSave'),async()=>{
+    $('#v112UnitSave').onclick=async()=>{
       if(!state.connected)return toast('Connexion Grist requise.');
       const code=$('#v112UnitCode').value.trim();if(!code)return toast('Code obligatoire.');
       if(trows('InventoryUnits').some(x=>core.normalizeText(x.Code)===core.normalizeText(code)))return toast('Ce code existe déjà.');
@@ -1065,7 +1001,7 @@
         ]);
         closeModal();await loadAll();toast(`Ajouté en ${p.Slot}.`);renderInventory(type);
       }catch(err){console.error(err);toast(`Erreur : ${err.message||err}`);}
-    });
+    };
   }
 
   function addUnitFromItem(type,data,item){
@@ -1098,7 +1034,7 @@
       <div class="field" style="margin-top:12px"><label>Commentaires</label><textarea id="v112EditComments">${er(u.comments||'')}</textarea></div>
       <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn" id="v112EditCancel">Annuler</button><button class="btn btn-primary" id="v112EditSave">Enregistrer</button></div>`);
     $('#v112EditCancel').onclick=closeModal;
-    $('#v112EditSave').onclick=()=>withSavingButton($('#v112EditSave'),async()=>{
+    $('#v112EditSave').onclick=async()=>{
       try{
         await grist.docApi.applyUserActions([
           ['UpdateRecord','InventoryUnits',Number(u.id),{FillStatus:$('#v112EditFill').value.trim(),EstimatedVolume_uL:$('#v112EditVol').value===''?null:Number($('#v112EditVol').value),Status:$('#v112EditStatus').value.trim(),Comments:$('#v112EditComments').value.trim()}],
@@ -1106,7 +1042,7 @@
         ]);
         closeModal();await loadAll();toast('Unité modifiée.');renderInventory(type);
       }catch(err){console.error(err);toast(`Erreur : ${err.message||err}`);}
-    });
+    };
   }
 
   function showMoveGenericUnit(type,data,box,p){
@@ -1117,7 +1053,7 @@
       </select></div>
       <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn" id="v112MoveCancel">Annuler</button><button class="btn btn-primary" id="v112MoveSave">Déplacer</button></div>`);
     $('#v112MoveCancel').onclick=closeModal;
-    $('#v112MoveSave').onclick=()=>withSavingButton($('#v112MoveSave'),async()=>{
+    $('#v112MoveSave').onclick=async()=>{
       const target=trows('InventoryPositions').find(x=>Number(x.id)===Number($('#v112MoveTarget').value));
       if(!target||Number(target.Unit))return toast('Destination indisponible.');
       try{
@@ -1128,12 +1064,11 @@
         ]);
         closeModal();await loadAll();toast(`Déplacé vers ${target.Slot}.`);renderInventory(type);
       }catch(err){console.error(err);toast(`Erreur : ${err.message||err}`);}
-    });
+    };
   }
 
   async function markGenericEmpty(type,p){
     if(!confirm('Marquer ce vial comme vide ? La position restera occupée jusqu’au retrait physique.'))return;
-    return withSavingButton($('#v112EmptyUnit'),async()=>{
     try{
       await grist.docApi.applyUserActions([
         ['UpdateRecord','InventoryUnits',Number(p.vial.id),{FillStatus:'Vide',Status:'Vide / à retirer'}],
@@ -1141,12 +1076,10 @@
       ]);
       await loadAll();toast('Vial marqué vide.');renderInventory(type);
     }catch(err){console.error(err);toast(`Erreur : ${err.message||err}`);}
-    });
   }
 
   async function removeGenericUnit(type,p){
     if(!confirm('Confirmer le retrait physique ? La position sera libérée et le vial archivé.'))return;
-    return withSavingButton($('#v112RemoveUnit'),async()=>{
     try{
       await grist.docApi.applyUserActions([
         ['UpdateRecord','InventoryPositions',Number(p.id),{Unit:0,Available:true}],
@@ -1155,7 +1088,6 @@
       ]);
       storageState(type).slot=null;await loadAll();toast('Position libérée.');renderInventory(type);
     }catch(err){console.error(err);toast(`Erreur : ${err.message||err}`);}
-    });
   }
 
   // ---------------- Secondary import / reconciliation ----------------
@@ -1187,7 +1119,7 @@
     const cols=Object.keys(missing[0]);
     const values=Object.fromEntries(cols.map(c=>[c,missing.map(r=>r[c]??null)]));
     await grist.docApi.applyUserActions([['BulkAddRecord',table,Array(missing.length).fill(null),values]]);
-    const fresh=await BioDynaMitDataPhase2.readTable(table);state.data[table]=fresh;ns.data[table]=fresh;
+    const fresh=await grist.docApi.fetchTable(table);state.data[table]=fresh;ns.data[table]=fresh;
   }
 
   async function importSecondaryManifest(){
@@ -1226,7 +1158,7 @@
     if(attrs.length){
       const cols=Object.keys(attrs[0]);const values=Object.fromEntries(cols.map(c=>[c,attrs.map(r=>r[c]??null)]));
       await grist.docApi.applyUserActions([['BulkAddRecord','InventoryAttributes',Array(attrs.length).fill(null),values]]);
-      const fresh=await BioDynaMitDataPhase2.readTable('InventoryAttributes');state.data.InventoryAttributes=fresh;ns.data.InventoryAttributes=fresh;
+      const fresh=await grist.docApi.fetchTable('InventoryAttributes');state.data.InventoryAttributes=fresh;ns.data.InventoryAttributes=fresh;
     }
 
     await bulkAddMissing('InventoryContainers',m.containers.map(c=>({
@@ -1322,8 +1254,6 @@
   // We cannot rebind the declaration above, so append through a route post-hook.
   const originalRenderInventory=renderInventory;
   renderInventory=function(type){
-    if(ns.showInventoryLoadState?.())return;
-    BioDynaMitDataPhase2.captureView();
     originalRenderInventory(type);
     if(type===MANIFEST_TYPE && (ns.inventoryView[type]||'list')==='list'){
       const data=inventoryData(type);

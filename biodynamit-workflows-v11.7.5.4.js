@@ -22,13 +22,7 @@
   const e=v=>typeof esc==='function'?esc(v):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const norm=v=>String(v??'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
   const compact=v=>norm(v).replace(/\s+/g,'');
-  let decorationRead=null;
-  const tr=name=>{
-    if(decorationRead?.tables.has(name))return decorationRead.tables.get(name);
-    let value;try{value=rows(state.data?.[name]||v112.data?.[name]||v113.data?.[name])||[]}catch(_){value=[]}
-    if(decorationRead)decorationRead.tables.set(name,value);
-    return value;
-  };
+  const tr=name=>{try{return rows(state.data?.[name]||v112.data?.[name]||v113.data?.[name])||[]}catch(_){return[]}};
   const nowSec=()=>Date.now()/1000;
   const archivedStatus=v=>/^(archive|archived)$/i.test(norm(v));
   const activeRaw=r=>!(r?.Active===false||r?.Active===0||archivedStatus(r?.Status));
@@ -37,11 +31,6 @@
   const isAdmin=()=>v113.role==='admin';
 
   function secondaryData(){
-    if(decorationRead?.secondary)return decorationRead.secondary;
-    if(decorationRead){
-      let value;try{value=v112.inventoryData?.(SEC)||{items:[],units:[],containers:[],positions:[]}}catch(_){value={items:[],units:[],containers:[],positions:[]}}
-      decorationRead.secondary=value;return value;
-    }
     try{return v112.inventoryData?.(SEC)||{type:SEC,mode:'empty',items:[],units:[],containers:[],positions:[]}}
     catch(_){return {type:SEC,mode:'empty',items:[],units:[],containers:[],positions:[]}}
   }
@@ -92,7 +81,7 @@
     ));
   }
 
-  function physicalStockState(kind,item,inventory){
+  function physicalStockState(kind,item){
     if(kind==='primary'){
       const units=primaryUnitsFor(item),locations=primaryLocationsFor(item),locatedIds=new Set(locations.map(p=>Number(p.Vial))),unlocated=units.filter(v=>!locatedIds.has(Number(v.id))).length;
       if(!units.length)return{key:'zero',label:'0 vial relié',cl:'neutral',title:'Aucun vial relié à cette référence.',units,locations,unlocated:0};
@@ -100,7 +89,7 @@
       if(unlocated)return{key:'partial',label:`${locations.length} positionné${locations.length>1?'s':''} · ${unlocated} à ranger`,cl:'warn',title:'Une partie des vials reste à positionner.',units,locations,unlocated};
       return{key:'located',label:`${units.length} vial${units.length>1?'s':''} positionné${units.length>1?'s':''}`,cl:'ok',title:'Tous les vials reliés possèdent une position.',units,locations,unlocated:0};
     }
-    const data=inventory||secondaryData(),units=secondaryUnitsFor(item,data),locations=secondaryLocationsFor(item,data),locatedCodes=new Set(locations.map(p=>String(p.unitCode||''))),unlocated=units.filter(u=>!locatedCodes.has(String(u.code))).length;
+    const data=secondaryData(),units=secondaryUnitsFor(item,data),locations=secondaryLocationsFor(item,data),locatedCodes=new Set(locations.map(p=>String(p.unitCode||''))),unlocated=units.filter(u=>!locatedCodes.has(String(u.code))).length;
     if(!units.length)return{key:'zero',label:'0 vial relié',cl:'neutral',title:'Aucun vial relié à cette référence.',units,locations,unlocated:0};
     if(!locations.length)return{key:'unlocated',label:`${units.length} vial${units.length>1?'s':''} non positionné${units.length>1?'s':''}`,cl:'warn',title:'Vial relié à la référence mais sans position de stockage.',units,locations,unlocated:units.length};
     if(unlocated)return{key:'partial',label:`${locations.length} positionné${locations.length>1?'s':''} · ${unlocated} à ranger`,cl:'warn',title:'Une partie des vials reste à positionner.',units,locations,unlocated};
@@ -134,7 +123,7 @@
   async function liveFree(kind,id){
     try{
       const table=kind==='primary'?'Positions':'InventoryPositions',field=kind==='primary'?'Vial':'Unit';
-      const raw=await BioDynaMitDataPhase2.readTable(table),r=rows(raw).find(x=>String(x.id)===String(id));
+      const raw=await grist.docApi.fetchTable(table),r=rows(raw).find(x=>String(x.id)===String(id));
       if(!r)return{ok:false,reason:'Position introuvable.'};
       if(Number(r[field])>0)return{ok:false,reason:'Cette position vient d’être occupée.'};
       if(r.Available!==true)return{ok:false,reason:'Cette position est marquée indisponible.'};
@@ -577,36 +566,13 @@
   /* ---------------------------- UI decoration ------------------------ */
   function decorateRows(kind){
     const root=document.querySelector(`.u126-antibody-list[data-u126-kind="${kind}"]`);if(!root)return;
-    const inventory=kind==='secondary'?secondaryData():null;
-    const byId=new Map((inventory?inventory.items:tr('Antibodies')).map(item=>[String(item.id),item]));
-    const rawById=kind==='secondary'?new Map(tr('InventoryItems').map(item=>[String(item.id),item])):byId;
     root.querySelectorAll(`[data-u126-row^="${kind}:"]`).forEach(row=>{
-      const id=String(row.dataset.u126Row).split(':')[1],item=byId.get(id);if(!item)return;
-      const raw=rawById.get(String(item.id));if(raw&&!activeRaw(raw)){row.style.display='none';return}else row.style.display='';
-      const stock=physicalStockState(kind,item,inventory),cell=row.querySelector('.u126-col-stock');
-      if(cell){
-        const locate=stock.locations.length?`<button class="btn btn-sm u126-locate" data-v1174-locate="${kind}:${e(id)}">Voir dans la boîte</button>`:'';
-        const markup=`<span class="pill ${stock.cl}" title="${e(stock.title)}">${e(stock.label)}</span>${locate}`;
-        // Compare input and the browser's normalized markup. Reusing a cell must
-        // not trigger the observer again; another module's changes are detected.
-        if(cell._bdStockMarkup?.input!==markup||cell._bdStockMarkup?.rendered!==cell.innerHTML){
-          cell.innerHTML=markup;cell._bdStockMarkup={input:markup,rendered:cell.innerHTML};
-        }
-        const button=cell.querySelector('[data-v1174-locate]');
-        if(button)button.onclick=ev=>{
-          ev.preventDefault();ev.stopPropagation();const position=stock.locations[0];
-          if(kind==='primary'){
-            const vial=tr('Vials').find(v=>Number(v.id)===Number(position.Vial));if(vial)window.openBoxForVial?.(Number(vial.id));
-          }else{
-            v112.inventoryView[SEC]='storage';const st=v112.storageState[SEC]=v112.storageState[SEC]||{};
-            st.containerCode=position.containerCode;st.slot=position.slot;st.view='2d';v112.renderInventory?.(SEC);
-          }
-        };
-      }
+      const id=String(row.dataset.u126Row).split(':')[1],item=kind==='primary'?tr('Antibodies').find(a=>Number(a.id)===Number(id)):secondaryData().items.find(i=>String(i.id)===String(id));if(!item)return;
+      const raw=kind==='primary'?item:tr('InventoryItems').find(r=>Number(r.id)===Number(item.id));if(raw&&!activeRaw(raw)){row.style.display='none';return}else row.style.display='';
+      const s=physicalStockState(kind,item),cell=row.querySelector('.u126-col-stock');if(cell){const locate=s.locations.length?`<button class="btn btn-sm u126-locate" data-v1174-locate="${kind}:${e(id)}">Voir dans la boîte</button>`:'';cell.innerHTML=`<span class="pill ${s.cl}" title="${e(s.title)}">${e(s.label)}</span>${locate}`;cell.querySelector('[data-v1174-locate]')?.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();const p=s.locations[0];if(kind==='primary'){const v=tr('Vials').find(v=>Number(v.id)===Number(p.Vial));if(v)window.openBoxForVial?.(Number(v.id))}else{v112.inventoryView[SEC]='storage';const st=v112.storageState[SEC]=v112.storageState[SEC]||{};st.containerCode=p.containerCode;st.slot=p.slot;st.view='2d';v112.renderInventory?.(SEC)}})}
       if(kind==='secondary'){const qc=row.querySelector('.u126-col-qc .pill');if(qc&&norm(qc.textContent)==='non relie'){qc.textContent='Validé';qc.classList.remove('neutral','warn','bad');qc.classList.add('ok');qc.title='Le contrôle qualité est distinct de l’état physique du stock.'}}
     });
-    const firstMetric=root.querySelector('.u125-metrics .metric-value'),count=String(kind==='primary'?activePrimary().length:activeSecondaryRaw().length);
-    if(firstMetric&&firstMetric.textContent!==count)firstMetric.textContent=count;
+    const firstMetric=root.querySelector('.u125-metrics .metric-value');if(firstMetric)firstMetric.textContent=String(kind==='primary'?activePrimary().length:activeSecondaryRaw().length);
   }
   function decorateDetail(kind){
     const on=kind==='primary'?state.route==='antibody-detail':state.route===`inv:${SEC}`&&v112.inventoryView?.[SEC]==='detail';if(!on)return;const item=kind==='primary'?currentPrimary():currentSecondary();if(!item)return;const stock=physicalStockState(kind,item),stockHeading=[...document.querySelectorAll('#content h3')].find(x=>norm(x.textContent)==='stock'),card=stockHeading?.closest('.card');
@@ -615,11 +581,7 @@
     if(!document.querySelector('.v1174-reference-management')){const anchor=document.querySelector('.v117-context')||document.querySelector('#content .tabs')||document.querySelector('#content .page-title');if(anchor){const bar=document.createElement('div');bar.className='v1174-reference-management row';bar.style.cssText='gap:8px;margin:8px 0 14px;flex-wrap:wrap';bar.innerHTML=`<button class="btn" data-v1174-archive>Retirer de la liste</button>${isAdmin()?'<button class="btn btn-danger" data-v1174-delete>Supprimer définitivement</button>':''}`;anchor.after(bar);bar.querySelector('[data-v1174-archive]').onclick=()=>archiveCurrent(kind);bar.querySelector('[data-v1174-delete]')?.addEventListener('click',()=>hardDelete(kind))}}
   }
   function decorateArchivedButton(){const root=document.querySelector('.u126-antibody-list');if(!root)return;const kind=root.dataset.u126Kind,type=kind==='primary'?PRIMARY:SEC,bar=document.querySelector('.v112-top-actions');if(!bar||bar.querySelector('#v1174ArchivedBtn'))return;const n=type===PRIMARY?archivedPrimary().length:archivedSecondaryRaw().length;if(!n)return;const b=document.createElement('button');b.className='btn';b.id='v1174ArchivedBtn';b.textContent=`Archivés (${n})`;b.onclick=()=>showArchived(type);bar.appendChild(b)}
-  function decorate(){
-    const previous=decorationRead;decorationRead={tables:new Map(),secondary:null};
-    try{decorateRows('primary');decorateRows('secondary');decorateDetail('primary');decorateDetail('secondary');decorateArchivedButton()}
-    finally{decorationRead=previous;}
-  }
+  function decorate(){decorateRows('primary');decorateRows('secondary');decorateDetail('primary');decorateDetail('secondary');decorateArchivedButton()}
 
   function installStyle(){if(document.getElementById('v1174Style'))return;const s=document.createElement('style');s.id='v1174Style';s.textContent='.v1174-source{display:block;margin-top:5px;font-size:10px;color:#64788a}.v1174-source.ok{color:#25704f}.v1174-source.warn{color:#9a6820}.v1174-provenance{margin-top:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#f7fafc;font-size:12px;color:#536a7c}.v1174-stock-tools .pill{min-width:120px;text-align:center}.v1174-add .banner,.v1174-assign .banner{margin-top:10px}.v11754-search-section{margin-top:16px}.v11754-search-section h3{display:flex;align-items:center;gap:8px;margin:0 0 8px}.v11754-search-results{display:grid;gap:8px}.v11754-result{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff}.v11754-result b,.v11754-result small{display:block}.v11754-result small{margin-top:3px;color:#64788a}.v11754-mini-link{display:inline-block;margin-top:4px;font-size:11px}.v11754-errors{margin-top:10px}';document.head.appendChild(s)}
   function install(){

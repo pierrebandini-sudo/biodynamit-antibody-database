@@ -162,8 +162,6 @@
   }
 
   antibodyDetail = function(){
-    if(BioDynaMitDataPhase2.gate())return;
-    BioDynaMitDataPhase2.captureView();
     const a=rowById('Antibodies',state.selectedAntibody)||rows(state.data.Antibodies)[0]; if(!a){go('antibodies');return}
     const vs=rows(state.data.Vials).filter(v=>Number(v.Antibody)===Number(a.id));
     topbar('Fiche anticorps',`<button class="btn" id="backAbList">← Anticorps</button>`);

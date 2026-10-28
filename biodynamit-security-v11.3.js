@@ -79,11 +79,11 @@
   }
 
   async function listTablesSafe(){
-    try{return await BioDynaMitDataPhase2.listTables();}catch(_){return [];}
+    try{return await grist.docApi.listTables();}catch(_){return [];}
   }
 
   async function fetchTableSafe(name){
-    try{return await BioDynaMitDataPhase2.readTable(name);}
+    try{return await grist.docApi.fetchTable(name);}
     catch(err){return null;}
   }
 
@@ -93,11 +93,7 @@
     ns.securityTablesReady=['SecurityAdminGate','SecurityEditorGate','PublicSettings','AuditLog','ActivityLog']
       .every(t=>tables.includes(t));
 
-    // Gates/settings are critical. Full audit/activity tables load with their view.
-    const roleNames=['SecurityAdminGate','SecurityEditorGate','PublicSettings'];
-    await BioDynaMitDataPhase2.ensure(roleNames,{reason:'permissions',optional:true});
-    if(tables.includes('PublicSettings')&&BioDynaMitDataPhase2.errors.has('PublicSettings'))throw BioDynaMitDataPhase2.errors.get('PublicSettings');
-    for(const name of roleNames){
+    for(const name of Object.keys(SECURITY_SCHEMAS)){
       if(!tables.includes(name)){ ns.data[name]=null; continue; }
       const raw=await fetchTableSafe(name);
       ns.data[name]=raw;
@@ -129,13 +125,13 @@
     // - Editor can only read editor gate.
     // - Viewer can read neither gate.
     try{
-      await BioDynaMitDataPhase2.readTable('SecurityAdminGate');
+      await grist.docApi.fetchTable('SecurityAdminGate');
       ns.role=core.ROLES.ADMIN;
       return ns.role;
     }catch(_){}
 
     try{
-      await BioDynaMitDataPhase2.readTable('SecurityEditorGate');
+      await grist.docApi.fetchTable('SecurityEditorGate');
       ns.role=core.ROLES.EDITOR;
       return ns.role;
     }catch(_){}
@@ -178,7 +174,7 @@
   async function ensureSecuritySchema(){
     if(!state.connected) throw new Error('Connexion Grist requise.');
     const apply=ns._nativeApply||grist.docApi.applyUserActions.bind(grist.docApi);
-    const current=new Set(await BioDynaMitDataPhase2.listTables());
+    const current=new Set(await grist.docApi.listTables());
     const created=[];
 
     for(const [name,cols] of Object.entries(SECURITY_SCHEMAS)){
@@ -213,7 +209,7 @@
 
   function getRowFromState(table,id){
     try{
-      return BioDynaMitDataPhase2.recordById(table,id)||null;
+      return tableRows(state.data?.[table]).find(r=>Number(r.id)===Number(id))||null;
     }catch(_){return null;}
   }
 
@@ -362,7 +358,6 @@
       if(activityActions.length) await native(activityActions);
     }catch(err){
       console.warn('BioDynaMit v11.3 audit write:',err);
-      throw new window.BioDynaMitDataEnginePhase2.UnconfirmedWrite('Écriture partiellement confirmée : les données métier peuvent être enregistrées, mais le journal d’audit n’a pas été confirmé. Actualiser avant de réessayer. '+String(err.message||err));
     }
   }
 
@@ -376,12 +371,9 @@
   function installWriteGuard(){
     if(ns._writeGuardInstalled || !window.grist?.docApi?.applyUserActions) return;
     const original=grist.docApi.applyUserActions.bind(grist.docApi);
-    // Retain the existing policy guard; route its native writes explicitly
-    // through the shared service, including audit/activity batches.
-    ns._nativeApply=actions=>BioDynaMitDataPhase2.nativeWrite(actions,original);
+    ns._nativeApply=original;
 
     const guarded=async function(actions){
-      if(ns.readyPromise)await ns.readyPromise;
       const list=Array.isArray(actions)?actions:[];
       if(ns.securityEnabled){
         for(const action of list){
@@ -395,11 +387,11 @@
         }
       }
       try{
-        return await BioDynaMitDataPhase2.write(list,async prepared=>{
-          const result=await ns._nativeApply(prepared);
-          await writeAudit(prepared,true,'');
-          return result;
-        });
+        const result=await original(actions);
+        await writeAudit(list,true,'');
+        // Refresh app-specific security/activity data asynchronously; do not block UI.
+        setTimeout(()=>refreshSecurityData().catch(()=>{}),80);
+        return result;
       }catch(err){
         await writeAudit(list,false,err?.message||String(err));
         throw err;
@@ -851,12 +843,19 @@
     installWriteGuard();
     installUiObserver();
 
-    ns.readyPromise=(async()=>{
-      await window.BioDynaMitConnection;
-      if(!state.connected)throw Error('Connexion Grist indisponible pour vérifier les droits.');
-      await refreshSecurityData();applyRoleUI();injectActivityCard();
-    })();
-    ns.readyPromise.catch(error=>BioDynaMitDataPhase2.onError(error,[]));
+    let tries=0;
+    const wait=async()=>{
+      tries++;
+      if(state?.connected){
+        await refreshSecurityData();
+        await refreshActivityData();
+        applyRoleUI();
+        injectActivityCard();
+        return;
+      }
+      if(tries<40) setTimeout(wait,250);
+    };
+    wait();
   }
 
   ns.ensureSecuritySchema=ensureSecuritySchema;
