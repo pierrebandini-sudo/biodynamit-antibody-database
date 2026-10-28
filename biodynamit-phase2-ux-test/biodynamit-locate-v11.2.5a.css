@@ -1,0 +1,27 @@
+/* BioDynaMit v11.2.5a — list localization */
+.u125-list-locate{
+  display:block;
+  margin-top:6px;
+  white-space:nowrap;
+  font-size:10px!important;
+  padding:5px 7px!important;
+}
+.u125-location-list{
+  display:grid;
+  gap:8px;
+  margin-top:14px;
+}
+.u125-location-choice{
+  width:100%;
+  display:flex!important;
+  justify-content:space-between;
+  align-items:center;
+  gap:14px;
+  text-align:left;
+}
+.u125-location-choice span{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
