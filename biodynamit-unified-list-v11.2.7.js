@@ -36,16 +36,19 @@
   }
 
   function primaryUnitsFor(a,data){
+    if(data.listRelations)return data.listRelations.get(a)?.units||[];
     return data.units.filter(v=>Number(v.Antibody)===Number(a.id) && norm(v.Status)!=='archive');
   }
 
   function primaryLocationsFor(a,data){
+    if(data.listRelations)return data.listRelations.get(a)?.locations||[];
     const units=primaryUnitsFor(a,data);
     const unitIds=new Set(units.map(v=>Number(v.id)));
     return data.positions.filter(p=>Number(p.Vial)>0 && unitIds.has(Number(p.Vial)));
   }
 
   function secondaryUnitsFor(item,data){
+    if(data.listRelations)return data.listRelations.get(item)?.units||[];
     return data.units.filter(u=>
       String(u.itemId||'')===String(item.id) ||
       (u.itemCode && String(u.itemCode)===String(item.code))
@@ -53,6 +56,7 @@
   }
 
   function secondaryLocationsFor(item,data){
+    if(data.listRelations)return data.listRelations.get(item)?.locations||[];
     const units=secondaryUnitsFor(item,data);
     const codes=new Set(units.map(u=>String(u.code)));
     return data.positions.filter(p=>codes.has(String(p.unitCode||'')));
@@ -76,6 +80,7 @@
   }
 
   function pendingForSecondaryItem(item,data){
+    if(data.listRelations)return data.listRelations.get(item)?.pending||[];
     return pendingSecondaryUnits(data).filter(u=>
       String(u.candidateItemCode||'')===String(item.code) ||
       String(u.itemCode||'')===String(item.code) ||
@@ -170,8 +175,33 @@
     return {label:'Validé',cl:'ok',detail:'Référence et vials reliés sans réconciliation en attente.',countable:false,reconcile:false};
   }
 
-  function primaryRowsModel(){
-    const d=primaryData(),dup=primaryDupMap(d.items);
+  function relationsForList(data,primary){
+    const relations=new Map(data.items.map(i=>[i,{units:[],locations:[],pending:[]} ]));
+    const byId=new Map(),byCode=new Map(),unitCodeItems=new Map();
+    const add=(map,key,value)=>{if(!map.has(key))map.set(key,[]);map.get(key).push(value);};
+    for(const item of data.items){add(byId,primary?Number(item.id):String(item.id),item);add(byCode,String(item.code),item);}
+    for(const unit of data.units){
+      const linked=primary?(norm(unit.Status)==='archive'?[]:byId.get(Number(unit.Antibody))||[]):[
+        ...(byId.get(String(unit.itemId||''))||[]),...(unit.itemCode?byCode.get(String(unit.itemCode))||[]:[])
+      ];
+      const matches=new Set(linked),code=primary?Number(unit.id):String(unit.code);
+      if(!unitCodeItems.has(code))unitCodeItems.set(code,new Set());
+      for(const item of matches){relations.get(item).units.push(unit);unitCodeItems.get(code).add(item);}
+      if(!primary&&isPendingSecondaryUnit(unit)){
+        const pending=new Set([...linked,...(byCode.get(String(unit.candidateItemCode||''))||[]),...(byCode.get(String(unit.itemCode||''))||[])]);
+        for(const item of pending)relations.get(item).pending.push(unit);
+      }
+    }
+    for(const position of data.positions){
+      const code=primary?Number(position.Vial):String(position.unitCode||'');
+      if(primary&&!(code>0))continue;
+      for(const item of unitCodeItems.get(code)||[])relations.get(item).locations.push(position);
+    }
+    return relations;
+  }
+
+  function primaryRowsModel(data=primaryData()){
+    const d={...data,listRelations:relationsForList(data,true)},dup=primaryDupMap(d.items);
     return d.items.map(a=>{
       const units=primaryUnitsFor(a,d),locations=primaryLocationsFor(a,d),qc=primaryQuality(a,d,dup);
       return {
@@ -193,8 +223,8 @@
     });
   }
 
-  function secondaryRowsModel(){
-    const d=secondaryData();
+  function secondaryRowsModel(data=secondaryData()){
+    const d={...data,listRelations:relationsForList(data,false)};
     return d.items.map(i=>{
       const units=secondaryUnitsFor(i,d),locations=secondaryLocationsFor(i,d),qc=secondaryQuality(i,d);
       const fluor=String(i.fluorophore||'').trim();
@@ -226,9 +256,9 @@
     return list.filter(r=>norm(r.search).includes(n));
   }
 
-  function metricsFor(kind,models){
+  function metricsFor(kind,models,data){
     if(kind==='primary'){
-      const d=primaryData();
+      const d=data||primaryData();
       return {
         refs:models.length,
         units:d.units.length,
@@ -236,7 +266,7 @@
         control:models.filter(x=>x.quality.countable).length
       };
     }
-    const d=secondaryData();
+    const d=data||secondaryData();
     return {
       refs:models.length,
       units:d.units.length,
@@ -330,7 +360,7 @@
     if(!state.connected)return;
     for(const name of ['InventoryItems','InventoryUnits','InventoryPositions','InventoryContainers','InventoryHistory']){
       if(!state.tables.includes(name))continue;
-      const table=await grist.docApi.fetchTable(name);
+      const table=await BioDynaMitDataPhase2.readTable(name);
       state.data[name]=table;
       ns.data=ns.data||{};
       ns.data[name]=table;
@@ -589,16 +619,19 @@
   }
 
   function renderUniversalList(kind){
+    if(ns.showInventoryLoadState?.())return;
+    BioDynaMitDataPhase2.captureView();
     const isPrimary=kind==='primary';
     const title=isPrimary?'Anticorps primaires':'Anticorps secondaires';
-    const models=isPrimary?primaryRowsModel():secondaryRowsModel();
+    const data=isPrimary?primaryData():secondaryData();
+    const models=isPrimary?primaryRowsModel(data):secondaryRowsModel(data);
     const q=isPrimary?(state.search||''):(ns.inventorySearch?.[SEC]||'');
     const qcOnly=!!ns.qcFilter[kind];
     const baseShown=filtered(models,q);
     const shown=qcOnly
       ? baseShown.filter(r=>isPrimary ? r.quality.countable : r.quality.reconcile)
       : baseShown;
-    const m=metricsFor(kind,models);
+    const m=metricsFor(kind,models,data);
 
     topbar(title,topActions(kind));
     content.innerHTML=`<div class="u126-antibody-list" data-u126-kind="${kind}">
@@ -636,7 +669,7 @@
             <th>Nom</th><th>Cible</th><th>${specificityLabel(kind)}</th><th>Hôte</th>
             <th>Fournisseur</th><th>Référence</th><th>Stock</th><th>Contrôle qualité</th>
           </tr></thead>
-          <tbody id="u126Body">${tableHtml(kind,shown)}</tbody>
+          <tbody id="u126Body"></tbody>
         </table>
       </div>
 
@@ -655,11 +688,21 @@
       </div>
     </div>`;
 
+    let pager;
+    const visibleRows=list=>list.filter(r=>{
+      const raw=r.item.raw||r.item;
+      return !(raw.Active===false||raw.Active===0||/^(archive|archived)$/.test(norm(raw.Status)));
+    });
+    // Search the same complete model used by the counters. Typing never
+    // rebuilds all relations; a data refresh still rebuilds the entire view.
+    const searchText=new Map(models.map(r=>[r,norm(r.search)]));
+    const searchRows=query=>{
+      const needle=norm(query),list=needle?models.filter(r=>searchText.get(r).includes(needle)):models;
+      return visibleRows(qcOnly?list.filter(r=>isPrimary?r.quality.countable:r.quality.reconcile):list);
+    };
     const repaint=()=>{
-      const models2=isPrimary?primaryRowsModel():secondaryRowsModel();
       const q2=isPrimary?(state.search||''):(ns.inventorySearch?.[SEC]||'');
-      $('#u126Body').innerHTML=tableHtml(kind,filtered(models2,q2));
-      bindRows();
+      pager.setItems(searchRows(q2),{reset:true});
     };
 
     const bindRows=()=>{
@@ -716,6 +759,8 @@
         };
       });
     };
+
+    pager=window.BioDynaMitListViewV1183.mount({table:$('#u126Body').closest('table'),key:`universal:${kind}:${qcOnly}`,items:visibleRows(shown),renderRows:list=>tableHtml(kind,list),onDraw:bindRows});
 
     document.querySelectorAll('[data-u127-toggle-filter]').forEach(btn=>{
       btn.onclick=()=>{

@@ -43,9 +43,18 @@ const CANON = {
 };
 
 const state = {
-  route:'dashboard', connected:false, tables:[], data:{}, selectedAntibody:null, selectedBox:null,
+  route:'dashboard', connected:false, tables:[], data:{}, initialStatus:'loading', selectedAntibody:null, selectedBox:null,
   selectedVial:null, three:null, search:'', isDemo:false
 };
+
+const phase2Data=window.BioDynaMitPhase2Runtime.create(()=>state);
+// This entry loads app.js with defer, before DOMContentLoaded. Capture the
+// barrier now; checking readyState after an RPC cannot distinguish an ongoing
+// deferred-script sequence from a DOMContentLoaded event that already fired.
+const phase2DomReady=new Promise(resolve=>{
+  if(document.readyState==='complete')resolve();
+  else document.addEventListener('DOMContentLoaded',resolve,{once:true});
+});
 
 const navItems = [
   ['dashboard','⌂','Accueil'],['antibodies','Y','Anticorps'],['vials','▥','Vials'],['storage','❄','Stockage'],
@@ -64,7 +73,18 @@ function rows(table){
   if(table.records && Array.isArray(table.records)) return table.records;
   const keys=Object.keys(table); if(!keys.length) return [];
   const n=Math.max(...keys.map(k=>Array.isArray(table[k])?table[k].length:0));
-  return Array.from({length:n},(_,i)=>Object.fromEntries(keys.map(k=>[k,Array.isArray(table[k])?table[k][i]:undefined])));
+  // 11.8.3: same values/order, without allocating an entry array per cell.
+  const columns=keys.map(k=>Array.isArray(table[k])?table[k]:null),out=new Array(n);
+  for(let i=0;i<n;i++){
+    const row={};
+    for(let j=0;j<keys.length;j++){
+      const value=columns[j]?columns[j][i]:undefined;
+      if(keys[j]==='__proto__')Object.defineProperty(row,keys[j],{value,enumerable:true,writable:true,configurable:true});
+      else row[keys[j]]=value;
+    }
+    out[i]=row;
+  }
+  return out;
 }
 function rowById(name,id){return rows(state.data[name]).find(r=>Number(r.id)===Number(id));}
 function codeFrom(r,prefix){return r?.Code || `${prefix}-${String(r?.id||0).padStart(3,'0')}`}
@@ -74,29 +94,32 @@ function renderNav(){
   document.querySelectorAll('[data-route]').forEach(b=>b.onclick=()=>go(b.dataset.route));
 }
 function topbar(title, actions=''){ $('#topbar').innerHTML=`<div><strong>${esc(title)}</strong></div><div class="row">${actions}</div>`; }
-function go(route){state.route=route; renderNav(); render();}
+function go(route){state.route=route;renderNav();if(!phase2Data.gate()){phase2Data.captureView();render();}}
 
 async function connectGrist(){
   if(!window.grist){state.isDemo=true;state.connected=false;return false;}
   try{
     grist.ready({requiredAccess:'full', allowSelectBy:true});
-    state.tables=await grist.docApi.listTables();
+    state.tables=await BioDynaMitDataPhase2.listTables();
     state.connected=true;
     return true;
   }catch(e){console.warn(e);state.isDemo=true;state.connected=false;return false;}
 }
-async function loadAll(){
-  if(!state.connected){seedDemoInMemory();return;}
-  state.tables=await grist.docApi.listTables();
-  const wanted=[...new Set([...Object.keys(CANON), ...state.tables.filter(t=>/antibod|20c|4c|storage/i.test(t))])];
-  const results=await Promise.all(wanted.filter(t=>state.tables.includes(t)).map(async t=>[t,await grist.docApi.fetchTable(t)]));
-  state.data=Object.fromEntries(results);
+async function loadAll(options={}){
+  if(!state.connected)throw Error('Connexion Grist requise.');
+  if(options.force)return BioDynaMitDataPhase2.fullRefresh({reason:'manual'});
+  return BioDynaMitDataPhase2.consume(BioDynaMitDataPhase2.plan());
 }
 function schemaReady(){return ['Antibodies','Vials','Boxes','Positions'].every(t=>state.tables.includes(t));}
+function recentHistoryRows(limit=8){
+  const table=state.data.History;
+  if(!table||Array.isArray(table)||Array.isArray(table.records))return rows(table).slice(-limit).reverse();
+  return rows(Object.fromEntries(Object.entries(table).map(([key,column])=>[key,Array.isArray(column)?column.slice(-limit):column]))).reverse();
+}
 
 async function createSchema(){
   if(!state.connected) return toast('Le schéma ne peut être créé que dans Grist.');
-  const current=new Set(await grist.docApi.listTables());
+  const current=new Set(await BioDynaMitDataPhase2.listTables());
   // Create in dependency-safe order.
   const order=['Suppliers','Antibodies','Boxes','Applications','Vials','Positions','Dilutions','Documents','Notes','History','AppSettings'];
   for(const t of order){
@@ -119,7 +142,7 @@ async function migrateAntibodies(){
   const existing=rows(state.data.Antibodies); if(existing.length) return toast('La table Antibodies contient déjà des données. Migration annulée.');
   const rawName=state.tables.find(t=>normalizeName(t)==='list of all antibodies') || state.tables.find(t=>/all.*antibod|antibod.*list/i.test(t));
   if(!rawName) return toast('Table source « list of all antibodies » introuvable.');
-  const raw=rows(await grist.docApi.fetchTable(rawName));
+  const raw=rows(await BioDynaMitDataPhase2.readTable(rawName));
   const recs=[];
   raw.forEach((r,i)=>{
     const name=findField(r,['Antigen-antibody','Antigen antibody','Antibody','Name','Antigen']);
@@ -181,7 +204,7 @@ function dashboard(){
     <div class="card card-pad"><h3 class="section-title">⚠ Anticorps à surveiller</h3>${miniVialTable(V.filter(v=>Number(v.EstimatedVolume_uL||999)<30).slice(0,6))}</div>
     <div class="card card-pad"><h3 class="section-title">▣ Vials à ranger</h3>${miniVialTable(V.filter(v=>normalizeName(v.Status)==='a ranger').slice(0,6))}</div>
   </div>
-  <div class="card card-pad" style="margin-top:16px"><h3 class="section-title">◷ Activité récente</h3>${historyTable(rows(state.data.History).slice(-8).reverse())}</div>`;
+  <div class="card card-pad" style="margin-top:16px"><h3 class="section-title">◷ Activité récente</h3>${phase2Data.snapshots.has('History')?historyTable(recentHistoryRows()):'<div role="status" class="subtitle">Chargement de l’historique…</div>'}</div>`;
   $('#searchBtn').onclick=()=>{state.search=$('#globalSearch').value;go('antibodies')};
   $('#globalSearch').onkeydown=e=>{if(e.key==='Enter')$('#searchBtn').click()};
 }
@@ -284,9 +307,24 @@ function showAddAntibody(){modal(`<h2>Ajouter un anticorps</h2><div class="form-
 async function saveAntibody(){const name=$('#fName').value.trim(),cat=$('#fCat').value.trim(),sup=$('#fSup').value.trim(),host=$('#fHost').value.trim();if(!name||!cat||!sup||!host)return toast('Nom, référence, fournisseur et host sont obligatoires.');const rec={Code:`AB-${String(rows(state.data.Antibodies).length+1).padStart(4,'0')}`,Name:name,FullName:name,CatalogNumber:cat,Supplier:sup,HostSpecies:host,ApplicationsText:$('#fApps').value,Target:$('#fTarget').value,Active:true};if(!state.connected){rec.id=Math.max(0,...rows(state.data.Antibodies).map(x=>x.id))+1;state.data.Antibodies.push(rec);closeModal();toast('Anticorps ajouté (démo).');antibodies();return}await grist.docApi.applyUserActions([['AddRecord','Antibodies',null,rec]]);closeModal();await loadAll();toast('Anticorps ajouté.');antibodies()}
 function showAddBox(){modal(`<h2>Ajouter une boîte</h2><div class="form-grid"><div class="field"><label>Nom *</label><input id="bName" placeholder="Box 1"></div><div class="field"><label>Température *</label><input id="bTemp" value="-20°C"></div><div class="field"><label>Rack</label><input id="bRack" placeholder="Rack 1"></div><div class="field"><label>Lignes</label><input id="bRows" type="number" value="10"></div><div class="field"><label>Colonnes</label><input id="bCols" type="number" value="10"></div></div><div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn" id="cancelBox">Annuler</button><button class="btn btn-primary" id="saveBox">Créer</button></div>`);$('#cancelBox').onclick=closeModal;$('#saveBox').onclick=saveBox}
 async function saveBox(){const name=$('#bName').value.trim(),temp=$('#bTemp').value.trim(),rack=$('#bRack').value.trim(),r=Number($('#bRows').value||10),c=Number($('#bCols').value||10);if(!name||!temp)return toast('Nom et température obligatoires.');const code=`BOX-${String(rows(state.data.Boxes).length+1).padStart(3,'0')}`;if(!state.connected)return toast('Création de boîte disponible dans Grist.');await grist.docApi.applyUserActions([['AddRecord','Boxes',null,{Code:code,Name:name,Temperature:temp,Rack:rack,Rows:r,Columns:c,Notes:''}]]);await loadAll();const box=rows(state.data.Boxes).find(b=>b.Code===code);const slots=[];for(let y=0;y<r;y++)for(let x=0;x<c;x++){const s=`${String.fromCharCode(65+y)}${x+1}`;slots.push({Code:`${code}-${s}`,Box:box.id,Slot:s,Vial:0,Available:true,Notes:''})}const cols=Object.keys(slots[0]),vals=Object.fromEntries(cols.map(k=>[k,slots.map(v=>v[k])]));await grist.docApi.applyUserActions([['BulkAddRecord','Positions',Array(slots.length).fill(null),vals]]);closeModal();await loadAll();toast('Boîte créée avec ses positions.');storage()}
-function modal(html){$('#modalCard').innerHTML=html;$('#modal').classList.remove('hidden')}function closeModal(){$('#modal').classList.add('hidden')}
+function modal(html){phase2Data.beginEdit();$('#modalCard').innerHTML=html;$('#modal').classList.remove('hidden')}function closeModal(){$('#modal').classList.add('hidden');phase2Data.endEdit()}
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()}
 
-function render(){renderNav();if(state.connected&&!schemaReady()&&state.route!=='admin'){setupPage();return}switch(state.route){case'dashboard':dashboard();break;case'antibodies':antibodies();break;case'antibody-detail':antibodyDetail();break;case'vials':vials();break;case'storage':storage();break;case'box3d':box3d();break;case'alerts':alerts();break;case'documents':documents();break;case'journal':journal();break;case'admin':admin();break;default:dashboard()}}
+function render(){if(phase2Data.gate())return;phase2Data.captureView();renderNav();if(state.connected&&!schemaReady()&&state.route!=='admin'){setupPage();return}switch(state.route){case'dashboard':dashboard();break;case'antibodies':antibodies();break;case'antibody-detail':antibodyDetail();break;case'vials':vials();break;case'storage':storage();break;case'box3d':box3d();break;case'alerts':alerts();break;case'documents':documents();break;case'journal':journal();break;case'admin':admin();break;default:dashboard()}}
 
-(async()=>{await connectGrist();await loadAll();render();})();
+// Expose completion, not data: late-loaded extensions can finish initialization
+// without starting another read of every inventory during the first load.
+window.BioDynaMitConnection=connectGrist();
+window.BioDynaMitInitialLoad=(async()=>{
+  try{
+    await window.BioDynaMitConnection;
+    await phase2DomReady;
+    if(window.grist&&!state.connected)throw Error('La connexion Grist a échoué.');
+    await phase2Data.bootstrap();state.initialStatus='ready';render();phase2Data.background(['History']);
+  }catch(error){
+    state.initialStatus='error';
+    content.innerHTML=`<div class="bd1183-status" role="alert"><b>Chargement impossible</b><p>${esc(error.message||error)}</p><button class="btn" id="bd1183Retry">Réessayer</button></div>`;
+    $('#bd1183Retry').onclick=()=>location.reload();
+    console.error('BioDynaMit initial load:',error);
+  }
+})();

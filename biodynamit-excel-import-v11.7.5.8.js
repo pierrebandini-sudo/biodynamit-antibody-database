@@ -249,6 +249,7 @@
 
   async function chooseFile(file){
     if(!file)return;
+    if(!window.XLSX)await window.BioDynaMitDependenciesV1183.xlsx();
     if(!window.XLSX)throw Error('La librairie XLSX n’a pas pu être chargée.');
     const buf=await file.arrayBuffer();
     X.workbook=XLSX.read(buf,{type:'array'});
@@ -457,7 +458,7 @@
         }else{
           const rec={...p.core,RawTable:`${X.fileName}:${X.sheetName}`,RawRowId:p.sourceRow};
           await grist.docApi.applyUserActions([['AddRecord','InventoryItems',null,rec]]);
-          const fresh=await grist.docApi.fetchTable('InventoryItems');
+          const fresh=await BioDynaMitDataPhase2.readTable('InventoryItems');
           state.data.InventoryItems=fresh;ns.data.InventoryItems=fresh;
           const created=rows(fresh).find(x=>x.Code===rec.Code&&x.InventoryType===X.type);
           if(created)await upsertAttributes(created.id,p.attributes,source);
@@ -522,49 +523,47 @@
     const defs=importedDefs(type);
     if(!defs.length)return;
 
-    let data;
-    try{data=ns.inventoryData?.(type)}catch(_){return}
-    if(!data)return;
-
     const table=q('#content .card.table-wrap table.table');
     if(!table)return;
     const signature=defs.map(f=>`${f.FieldKey}:${f.Label}:${f.SortOrder}`).join('|');
     if(table.dataset.excelSignature===signature)return;
+    // Check the DOM generation BEFORE building an inventory. Observer callbacks
+    // caused by other modules must not recompute the same imported list.
+    let data;
+    try{data=table._bdInventoryData||ns.inventoryData?.(type)}catch(_){return}
+    if(!data)return;
     table.dataset.excelSignature=signature;
 
     const renderRows=list=>{
-      const tbody=table.querySelector('tbody');
-      if(!tbody)return;
       if(!list.length){
-        tbody.innerHTML=`<tr><td colspan="${defs.length}"><div class="empty">Aucun résultat.</div></td></tr>`;
-        return;
+        return `<tr><td colspan="${defs.length}"><div class="empty">Aucun résultat.</div></td></tr>`;
       }
-      tbody.innerHTML=list.map(item=>`<tr>${defs.map((f,i)=>{
+      return list.map(item=>`<tr>${defs.map((f,i)=>{
         const val=displayValue(item,f);
         return i===0
           ?`<td><button class="v112-link-btn" data-v11755-item="${escHtml(item.id)}"><b>${escHtml(val)}</b></button></td>`
           :`<td>${escHtml(val)}</td>`;
       }).join('')}</tr>`).join('');
-      tbody.querySelectorAll('[data-v11755-item]').forEach(b=>b.onclick=()=>{
-        ns.inventorySelected[type]=b.dataset.v11755Item;
-        ns.inventoryView[type]='detail';
-        ns.renderInventory?.(type);
-      });
     };
 
+    table._bdPager?.destroy();
     table.innerHTML=`<thead><tr>${defs.map(f=>`<th>${escHtml(f.Label)}</th>`).join('')}</tr></thead><tbody></tbody>`;
+    const pager=window.BioDynaMitListViewV1183.mount({table,key:`import:${type}`,items:dynamicFilter(data.items||[],defs,q('#v112InvSearch')?.value||ns.inventorySearch?.[type]||''),renderRows});
+    table.tBodies[0].onclick=event=>{
+      const b=event.target.closest('[data-v11755-item]');if(!b)return;
+      ns.inventorySelected[type]=b.dataset.v11755Item;ns.inventoryView[type]='detail';ns.renderInventory?.(type);
+    };
     const search=q('#v112InvSearch'),clear=q('#v112InvClear');
     const applySearch=()=>{
       const query=search?.value||'';
       ns.inventorySearch[type]=query;
-      renderRows(dynamicFilter(data.items||[],defs,query));
+      pager.setItems(dynamicFilter(data.items||[],defs,query),{reset:true});
     };
     if(search){
       search.placeholder=`Rechercher dans ${defs.length} colonne(s) Excel…`;
       search.oninput=applySearch;
     }
-    if(clear)clear.onclick=()=>{if(search)search.value='';ns.inventorySearch[type]='';renderRows(data.items||[]);search?.focus()};
-    renderRows(dynamicFilter(data.items||[],defs,search?.value||ns.inventorySearch?.[type]||''));
+    if(clear)clear.onclick=()=>{if(search)search.value='';ns.inventorySearch[type]='';pager.setItems(data.items||[],{reset:true});search?.focus()};
 
     const subtitle=q('#content .page-title + .subtitle');
     if(subtitle)subtitle.textContent=`Liste importée depuis Excel — ${defs.length} colonne(s) reprises depuis le fichier source.`;
