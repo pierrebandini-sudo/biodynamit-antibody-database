@@ -1,0 +1,93 @@
+/* BioDynaMit v11.3 — Permissions & Audit */
+
+.v113-security-metrics{margin-top:14px}
+.v113-security-metrics h3{margin:0 0 8px;font-size:13px}
+.v113-section{margin-top:14px}
+.v113-section code{
+  background:#eef3f7;color:#29445d;padding:2px 5px;border-radius:5px;
+}
+.v113-role-grid{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px;
+}
+.v113-role-grid>div{
+  border:1px solid #dbe6ee;border-radius:10px;padding:12px;background:#fbfdff;
+  display:grid;gap:5px;
+}
+.v113-role-grid b{color:#17344f}
+.v113-role-grid span{font-size:11px;line-height:1.45;color:#61798e}
+
+.profile.v113-role-admin .avatar{outline:2px solid #48b879}
+.profile.v113-role-editor .avatar{outline:2px solid #e0ab38}
+.profile.v113-role-viewer .avatar{outline:2px solid #9fb2c2}
+.profile.v113-role-unconfigured .avatar{outline:2px solid #d4934a}
+
+.v113-audit-table{
+  max-height:430px;overflow:auto;border:1px solid #e2eaf0;border-radius:9px;
+}
+.v113-audit-table .table{min-width:980px}
+.v113-audit-table td{vertical-align:top}
+.v113-audit-table td small{display:block;color:#73889a;margin-top:2px}
+
+.v113-audit-detail-grid{
+  display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px 12px;
+  margin-top:12px;padding:12px;border:1px solid #dfe8ef;border-radius:9px;background:#fafcfd;
+}
+.v113-audit-detail-grid b{color:#60788c;font-size:11px}
+.v113-audit-detail-grid span{overflow-wrap:anywhere}
+.v113-json{margin-top:10px;border:1px solid #dfe8ef;border-radius:8px;padding:8px 10px}
+.v113-json summary{cursor:pointer;font-weight:700;color:#29445d}
+.v113-json pre{
+  max-height:260px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
+  background:#f4f7f9;border-radius:6px;padding:10px;font-size:10px;color:#20374e;
+}
+
+.v113-item-activity{border-left:4px solid #8ebfe3}
+.v113-activity-list{display:grid;margin-top:10px}
+.v113-activity-row{
+  display:grid;grid-template-columns:150px minmax(0,1fr) 130px;gap:12px;
+  padding:10px 0;border-top:1px solid #e6edf2;align-items:start;
+}
+.v113-activity-row time{font-size:10px;color:#71869a}
+.v113-activity-row div{display:grid;gap:2px}
+.v113-activity-row div b{font-size:12px;color:#1c354d}
+.v113-activity-row div span{font-size:11px;color:#60788d}
+.v113-activity-row small{text-align:right;color:#71869a}
+
+.v113-security-disabled{
+  opacity:.65;pointer-events:none;
+}
+
+/* Accessibility contract retained in v11.3 */
+.v113-section input,
+.v113-section select,
+.v113-section textarea,
+.v113-section button:not(.btn-primary),
+.v113-section .btn:not(.btn-primary){
+  color:#17344f!important;
+  -webkit-text-fill-color:#17344f!important;
+}
+.v113-section input,
+.v113-section select,
+.v113-section textarea{
+  background:#fff!important;
+}
+.v113-section .btn-primary{
+  color:#fff!important;
+  -webkit-text-fill-color:#fff!important;
+}
+.v113-section button:disabled,
+.v113-section .btn:disabled{
+  color:#667788!important;
+  -webkit-text-fill-color:#667788!important;
+  background:#eef2f5!important;
+}
+.v113-section *:focus-visible{
+  outline:3px solid rgba(18,126,212,.28);
+  outline-offset:2px;
+}
+
+@media(max-width:900px){
+  .v113-role-grid{grid-template-columns:1fr}
+  .v113-activity-row{grid-template-columns:1fr;gap:4px}
+  .v113-activity-row small{text-align:left}
+}

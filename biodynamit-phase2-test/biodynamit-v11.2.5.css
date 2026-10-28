@@ -1,0 +1,117 @@
+/* BioDynaMit v11.2.5 — universal antibody visual grammar.
+   Loaded after v11.2.4. No data/schema changes.
+*/
+
+/* -------------------------------------------------------------------------- */
+/* Universal lists                                                            */
+/* -------------------------------------------------------------------------- */
+.u125-metrics{margin-top:14px}
+.u125-metrics .card{min-height:72px}
+.u125-metrics .metric-value{font-size:22px;font-weight:850;color:#17344f}
+
+.u125-universal-table .table{min-width:900px}
+.u125-universal-table th{white-space:nowrap}
+.u125-universal-table td{vertical-align:top}
+
+.u125-link-btn{
+  appearance:none;border:0!important;background:transparent!important;
+  color:#0876cf!important;-webkit-text-fill-color:#0876cf!important;
+  padding:0!important;text-align:left;cursor:pointer;font:inherit;
+}
+.u125-link-btn:hover{text-decoration:underline}
+.u125-qc-pill.bad{background:#ffe7e8;color:#a33d49}
+.u125-qc-pill.warn{background:#fff1cf;color:#7c5d13}
+.u125-qc-pill.neutral{background:#edf3f7;color:#526b80}
+.u125-qc-pill.ok{background:#ddf5e6;color:#236c42}
+
+.u125-quality-summary{border-left:4px solid #9bb9cf}
+
+/* Keep secondary table visually in the same family as primary. */
+#v112InvBody .v112-link-btn,
+.v112-link-btn{
+  color:#0876cf!important;
+  -webkit-text-fill-color:#0876cf!important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reference-first creation                                                   */
+/* -------------------------------------------------------------------------- */
+.u125-modal h2{margin-top:0}
+.u125-ref-first{margin:16px 0}
+.u125-ref-banner{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:14px;
+  padding:13px 14px;border:1px solid #cfe0ee;border-radius:10px;
+  background:#f4f9fd;margin-bottom:14px;color:#20374e;
+}
+.u125-ref-banner p{margin:4px 0 0;color:#60788d;font-size:12px;line-height:1.45}
+.u125-optional{font-weight:500;color:#71869a;font-size:11px}
+.u125-details{
+  margin-top:14px;border:1px solid #dbe6ef;border-radius:10px;
+  background:#fbfdff;padding:0 14px 14px;
+}
+.u125-details summary{
+  cursor:pointer;padding:13px 0;font-weight:800;color:#20374e!important;
+  -webkit-text-fill-color:#20374e!important;
+}
+.u125-details summary span{font-weight:500;color:#71869a}
+.u125-form-body{padding-top:2px}
+.u125-enrichment-note{
+  display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;
+  margin-top:14px;padding:11px 13px;border-radius:9px;background:#f7fafc;
+  border:1px solid #dbe6ef;color:#20374e;font-size:12px;line-height:1.45;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Storage parity: use the validated primary proportions as the UI grammar.    */
+/* Geometry/data conventions remain inventory-specific.                       */
+/* -------------------------------------------------------------------------- */
+.v112-storage-box-row{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:15px!important;
+  margin:12px 0 23px!important;
+}
+.v112-storage-box-card{
+  min-height:82px!important;
+  padding:16px 15px!important;
+  border-radius:9px!important;
+}
+.v112-storage-box-icon{
+  width:42px!important;height:42px!important;border-radius:9px!important;
+}
+.v112-storage-box-body strong{font-size:14px!important}
+.v112-storage-box-body small{margin-top:1px}
+.v112-storage-primarylike .v112-workbench{
+  border-radius:12px!important;
+  box-shadow:0 5px 22px rgba(36,69,99,.025)!important;
+}
+.v112-storage-primarylike .v112-storage-toolbar{
+  min-height:72px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border-bottom:1px solid #dce6ef;
+}
+.v112-storage-primarylike .v112-storage-footer{
+  min-height:52px;
+}
+.v112-storage-primarylike .v112-unit-panel{
+  border-left:1px solid #dce6ef;
+}
+
+/* Primary and secondary hero spacing should read the same. */
+.v112-storage-hero{
+  margin:4px 0 22px!important;
+}
+.v112-storage-hero .page-title{
+  font-size:29px!important;
+  letter-spacing:-.8px!important;
+  margin:4px 0 8px!important;
+}
+
+/* Never collapse secondary box cards too early: primary already fits 3 cards
+   around this width in the validated layout. */
+@media (min-width:601px){
+  .v112-storage-box-row{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media (max-width:600px){
+  .v112-storage-box-row{grid-template-columns:1fr!important}
+  .u125-enrichment-note{grid-template-columns:1fr}
+}
