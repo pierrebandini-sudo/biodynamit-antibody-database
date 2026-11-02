@@ -1,0 +1,67 @@
+/* BioDynaMit v11.5 — Outils d'équipe */
+.v115-wrap{max-width:1500px;margin:0 auto}
+.v115-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px}
+.v115-tabs .tab{cursor:pointer}
+.v115-hero{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,.8fr);gap:16px;align-items:stretch}
+.v115-hero .card{height:100%}
+.v115-metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
+.v115-metric{padding:16px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.v115-metric b{font-size:28px;line-height:1;display:block;color:var(--ink)}
+.v115-metric span{display:block;margin-top:7px;color:var(--muted);font-size:12px}
+.v115-grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.v115-grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.v115-card-title{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.v115-card-title h3{margin:0}
+.v115-list{display:flex;flex-direction:column;gap:8px}
+.v115-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.v115-list-row:last-child{border-bottom:0}
+.v115-list-row .meta{display:flex;flex-direction:column;gap:3px;min-width:0}
+.v115-list-row .meta small{color:var(--muted)}
+.v115-compact{font-size:12px;color:var(--muted)}
+.v115-panel-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.v115-panel-result{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fbfdff}
+.v115-panel-result h4{margin:0 0 8px}
+.v115-secondary-option{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+.v115-secondary-option:first-of-type{border-top:0}
+.v115-spectrum{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.v115-dot{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.12)}
+.v115-warn{border-left:4px solid #c77800;background:#fff7e6;padding:10px 12px;border-radius:8px;margin:8px 0}
+.v115-ok{border-left:4px solid #218739;background:#edf8ef;padding:10px 12px;border-radius:8px;margin:8px 0}
+.v115-info{border-left:4px solid #4876c7;background:#eef4ff;padding:10px 12px;border-radius:8px;margin:8px 0}
+.v115-stars{letter-spacing:2px;font-size:16px;white-space:nowrap}
+.v115-review{border:1px solid var(--line);border-radius:11px;padding:12px;background:#fff}
+.v115-review header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.v115-review p{margin:8px 0 0;line-height:1.45}
+.v115-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.v115-toolbar input,.v115-toolbar select{min-width:180px}
+.v115-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f4f6f8;border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+.v115-progress{height:9px;background:#e9edf2;border-radius:999px;overflow:hidden}
+.v115-progress>i{display:block;height:100%;background:#527cb8}
+.v115-check-actions{display:flex;gap:5px;flex-wrap:wrap}
+.v115-check-actions button{font-size:11px;padding:5px 7px}
+.v115-label-controls{display:grid;grid-template-columns:minmax(250px,1fr) auto;gap:10px;align-items:end}
+.v115-label-sheet{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.v115-label{border:1px solid #9da9b4;border-radius:8px;padding:10px;display:grid;grid-template-columns:92px minmax(0,1fr);gap:10px;align-items:center;background:#fff;break-inside:avoid;min-height:108px}
+.v115-label svg{width:88px;height:88px;display:block}
+.v115-label h4{margin:0 0 3px;font-size:13px;line-height:1.25}
+.v115-label p{margin:2px 0;font-size:11px;color:#364553;overflow-wrap:anywhere}
+.v115-search-help{font-size:12px;color:var(--muted);margin-top:7px;line-height:1.55}
+.v115-search-result{cursor:pointer}
+.v115-search-result:hover{background:#f5f8fc}
+.v115-context-card{margin-top:16px}
+.v115-context-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.v115-meta-grid{display:grid;grid-template-columns:150px 1fr;gap:8px 12px}
+.v115-meta-grid b{color:var(--muted);font-size:12px}
+.v115-no-data{padding:18px;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}
+.v115-status-btn.active{box-shadow:0 0 0 2px rgba(64,104,160,.25) inset}
+.v115-microscope-card{border:1px solid var(--line);border-radius:11px;padding:13px;background:#fff}
+.v115-microscope-card h4{margin:0 0 5px}
+.v115-expiring{color:#a63f2d;font-weight:700}
+@media(max-width:1050px){.v115-hero,.v115-grid-2,.v115-grid-3{grid-template-columns:1fr}.v115-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v115-label-sheet{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.v115-metric-grid,.v115-panel-form,.v115-label-sheet,.v115-label-controls{grid-template-columns:1fr}.v115-label{grid-template-columns:82px minmax(0,1fr)}.v115-label svg{width:78px;height:78px}}
+@media print{
+  body.v115-print-labels .sidebar,body.v115-print-labels .topbar,body.v115-print-labels .v115-tabs,body.v115-print-labels .v115-no-print,body.v115-print-labels .page-title,body.v115-print-labels .subtitle{display:none!important}
+  body.v115-print-labels .main,body.v115-print-labels .content{padding:0!important;margin:0!important;width:100%!important;max-width:none!important}
+  body.v115-print-labels .v115-label-sheet{display:grid!important;grid-template-columns:repeat(3,1fr);gap:5mm;margin:0}
+  body.v115-print-labels .v115-label{border:1px solid #555;min-height:30mm;padding:3mm}
+}

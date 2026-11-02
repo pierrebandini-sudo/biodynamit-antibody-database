@@ -1,0 +1,148 @@
+/* BioDynaMit v11.2.4 — primary/secondary parity + full-box fit.
+   Loaded after v11.2.3. No data/schema changes.
+*/
+
+/* Generic storage now follows the validated primary workbench geometry. */
+.v112-storage-primarylike .v112-workbench{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 292px;
+  min-height:535px !important;
+  height:535px;
+}
+.v112-storage-primarylike .v112-view-host{
+  min-width:0;
+  min-height:535px !important;
+  height:535px;
+  overflow:hidden;
+  background:#f7fafc;
+}
+.v112-storage-primarylike #v112Scene,
+.v112-storage-primarylike #v112Grid{
+  width:100%;
+  min-height:535px !important;
+  height:535px !important;
+  box-sizing:border-box;
+}
+.v112-storage-primarylike #v112Grid{
+  padding:14px 16px;
+  overflow:hidden;
+  background:#fff;
+}
+.v112-storage-primarylike .v112-unit-panel{
+  height:535px;
+  box-sizing:border-box;
+  padding:24px 22px;
+  overflow:auto;
+  background:linear-gradient(140deg,#fff,#fafcfe);
+}
+
+/* Critical fit rule: no intrinsic max-content width, so all 10 columns remain visible. */
+.v112-storage-primarylike .v112-slot-grid,
+.v112-storage-primarylike .v112-slot-grid-excel{
+  width:100%;
+  min-width:0 !important;
+  max-width:100%;
+  gap:5px;
+}
+.v112-storage-primarylike .v112-slot-grid .coordinate{
+  min-width:0;
+  min-height:20px;
+  padding:2px;
+  font-size:10px;
+}
+.v112-storage-primarylike .v112-slot-grid button{
+  min-width:0 !important;
+  width:100%;
+  min-height:40px !important;
+  height:40px;
+  padding:3px 2px;
+  gap:1px;
+  border-radius:7px;
+  overflow:hidden;
+}
+.v112-storage-primarylike .v112-slot-grid button b{
+  display:block;
+  font-size:10px;
+  line-height:1;
+  margin:0;
+}
+.v112-storage-primarylike .v112-slot-fluor{
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:8px;
+  line-height:1;
+}
+.v112-storage-primarylike .v112-slot-grid button small{
+  display:block;
+  width:100%;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:7px;
+  line-height:1.05;
+}
+
+/* Same visual language for the storage toolbar and box cards. */
+.v112-storage-primarylike .v112-storage-toolbar{
+  padding:16px 18px;
+}
+.v112-storage-primarylike .v112-storage-toolbar h2{
+  font-size:16px;
+}
+.v112-storage-box-card{
+  min-height:72px;
+}
+
+/* List | Stockage | Ajouter is the permanent family-level action pattern. */
+.v112-inventory-switch{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:7px;
+  flex-wrap:wrap;
+}
+.v112-inventory-switch .btn{
+  white-space:nowrap;
+}
+
+/* Permanent readability contract for every interactive light surface. */
+.content button:not(.btn-primary):not(.primary):not(.danger),
+.topbar button:not(.btn-primary):not(.primary):not(.danger),
+.modal-card button:not(.btn-primary):not(.primary):not(.danger),
+.content input:not([type="checkbox"]):not([type="radio"]),
+.content select,
+.content textarea,
+.modal-card input:not([type="checkbox"]):not([type="radio"]),
+.modal-card select,
+.modal-card textarea{
+  color:#15243a !important;
+  -webkit-text-fill-color:#15243a !important;
+}
+.content button.btn-primary,
+.topbar button.btn-primary,
+.modal-card button.btn-primary{
+  color:#fff !important;
+  -webkit-text-fill-color:#fff !important;
+}
+
+@media(max-width:1050px){
+  .v112-storage-primarylike .v112-workbench{
+    grid-template-columns:minmax(0,1fr) 250px;
+  }
+  .v112-storage-primarylike .v112-unit-panel{padding:20px 15px}
+}
+@media(max-width:900px){
+  .v112-storage-primarylike .v112-workbench{
+    grid-template-columns:1fr;
+    height:auto;
+  }
+  .v112-storage-primarylike .v112-view-host,
+  .v112-storage-primarylike #v112Scene,
+  .v112-storage-primarylike #v112Grid{height:500px !important;min-height:500px !important}
+  .v112-storage-primarylike .v112-unit-panel{height:auto;max-height:none;border-left:0;border-top:1px solid var(--line)}
+  .v112-storage-primarylike #v112Grid{overflow:auto}
+}

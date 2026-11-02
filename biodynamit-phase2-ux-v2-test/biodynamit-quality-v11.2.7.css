@@ -1,0 +1,231 @@
+/* BioDynaMit v11.2.7 — interactive quality control & reconciliation.
+   No schema/data migration.
+*/
+
+/* Clickable QC metric card */
+.u127-metric-card{
+  appearance:none;
+  width:100%;
+  text-align:left;
+  cursor:pointer;
+  color:#17344f!important;
+  -webkit-text-fill-color:#17344f!important;
+  background:#fff!important;
+  border:1px solid #d8e4ed!important;
+  font:inherit;
+}
+.u127-metric-card:hover{
+  border-color:#87bde6!important;
+  box-shadow:0 5px 18px rgba(25,88,136,.07);
+}
+.u127-metric-card.active{
+  border-color:#1487dd!important;
+  background:#f1f8fe!important;
+}
+.u127-metric-card small{
+  display:block;
+  margin-top:5px;
+  color:#71869a;
+  -webkit-text-fill-color:#71869a;
+  font-size:10px;
+}
+
+/* Active filter banner */
+.u127-filter-banner{
+  margin-top:12px;
+  padding:9px 12px;
+  border:1px solid #bcd9ee;
+  border-radius:9px;
+  background:#f4f9fd;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  color:#29465f;
+  font-size:12px;
+}
+
+/* QC row action */
+.u127-qc-action,
+.u127-summary-action{
+  appearance:none;
+  border:0!important;
+  cursor:pointer;
+  font:inherit;
+}
+.u127-qc-action:hover,
+.u127-summary-action:hover{
+  outline:2px solid rgba(20,135,221,.22);
+  outline-offset:2px;
+}
+.u127-summary-open{
+  white-space:nowrap;
+}
+
+/* Wide modal only while the reconciliation UI is inside it. */
+.modal-card:has(.u127-center){
+  width:min(1040px,calc(100vw - 54px))!important;
+  max-width:1040px!important;
+  max-height:calc(100vh - 54px)!important;
+  overflow:auto!important;
+}
+.modal-card:has(.u127-create-ref){
+  width:min(780px,calc(100vw - 54px))!important;
+  max-width:780px!important;
+}
+
+.u127-center{
+  color:#17344f;
+}
+.u127-center-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:18px;
+  margin-bottom:16px;
+}
+.u127-center-head h2{margin:2px 0 4px}
+.u127-eyebrow{
+  margin:0 0 2px;
+  font-size:10px;
+  letter-spacing:.12em;
+  font-weight:800;
+  color:#668098;
+}
+
+.u127-case-grid{
+  display:grid;
+  grid-template-columns:minmax(0,.9fr) minmax(0,1.25fr);
+  gap:14px;
+}
+.u127-source-label{
+  margin:8px 0 15px;
+  padding:11px 12px;
+  border-radius:9px;
+  background:#f3f7fa;
+  border:1px solid #dce6ee;
+  font-weight:750;
+  line-height:1.35;
+}
+
+.u127-compare-head,
+.u127-compare-row{
+  display:grid;
+  grid-template-columns:120px minmax(0,1fr) 24px minmax(0,1fr);
+  gap:8px;
+  align-items:center;
+}
+.u127-compare-head{
+  padding:0 8px 7px;
+  color:#73889b;
+  font-size:10px;
+  font-weight:700;
+}
+.u127-compare-row{
+  padding:8px;
+  border-top:1px solid #e6edf2;
+  font-size:12px;
+}
+.u127-compare-row > span:first-child{
+  color:#62798c;
+  font-weight:700;
+}
+.u127-compare-row b{
+  display:block;
+  min-width:0;
+  overflow-wrap:anywhere;
+  padding:5px 7px;
+  border-radius:6px;
+}
+.u127-compare-row b.ok{background:#e2f6e9;color:#246a40}
+.u127-compare-row b.bad{background:#ffe8e9;color:#a13b49}
+.u127-compare-row b.neutral{background:#eef3f6;color:#597084}
+.u127-arrow{text-align:center;color:#97a8b6}
+
+.u127-candidate{
+  margin-top:12px;
+  padding:11px 12px;
+  border-radius:9px;
+  border:1px solid #dce6ee;
+  background:#fafcfd;
+  display:grid;
+  gap:4px;
+  font-size:12px;
+}
+.u127-candidate > b{color:#60788c;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.u127-no-candidate{color:#9b5f22;font-weight:700}
+
+.u127-actions{
+  margin-top:14px;
+}
+.u127-action-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px;
+}
+.u127-manual-link{
+  margin-top:14px;
+  padding-top:13px;
+  border-top:1px solid #e1e9ef;
+}
+.u127-manual-link > label{
+  display:block;
+  margin-bottom:7px;
+  color:#5e768b;
+  font-size:11px;
+  font-weight:750;
+}
+.u127-manual-link .row{gap:8px}
+.u127-manual-link select{flex:1;min-width:240px}
+
+.u127-center-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:15px;
+  color:#6b8194;
+  font-size:11px;
+}
+
+/* New reference from a reconciliation case */
+.u127-source-box{
+  display:grid;
+  grid-template-columns:130px minmax(0,1fr);
+  gap:10px;
+  padding:10px 12px;
+  margin:14px 0;
+  background:#f4f8fb;
+  border:1px solid #dbe6ee;
+  border-radius:9px;
+  font-size:12px;
+}
+.u127-source-box b{color:#5f778b}
+.u127-help{
+  margin-top:12px;
+  color:#6d8294;
+  font-size:11px;
+}
+
+/* Explicit contrast on all QC controls */
+.u127-center button:not(.btn-primary),
+.u127-create-ref button:not(.btn-primary),
+.u127-center select,
+.u127-create-ref input{
+  color:#17344f!important;
+  -webkit-text-fill-color:#17344f!important;
+}
+.u127-center .btn-primary,
+.u127-create-ref .btn-primary{
+  color:#fff!important;
+  -webkit-text-fill-color:#fff!important;
+}
+
+@media(max-width:800px){
+  .u127-case-grid{grid-template-columns:1fr}
+  .u127-center-head{flex-direction:column}
+  .u127-compare-head,.u127-compare-row{
+    grid-template-columns:90px minmax(0,1fr) 18px minmax(0,1fr);
+  }
+}
